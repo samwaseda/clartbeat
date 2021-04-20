@@ -17,6 +17,8 @@ class Learn:
             self.redraw()
 
     def redraw(self):
+        if self.count > self.max_count:
+            return
         buttons = [widgets.Button(description = n) for n in self.choices]
         self.container = widgets.HBox(children=buttons)
         self.plot()
