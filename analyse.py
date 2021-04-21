@@ -22,7 +22,7 @@ class Analyse:
         return self.image.get_original(reduction=reduction)
 
     def initialize(self, initialize='all'):
-        elements = np.array(['none', 'heart', 'white', 'left', 'right', 'scar', 'ventricle', 'all'])
+        elements = np.array(['none', 'heart', 'white', 'scar', 'ventricle', 'all'])
         if initialize not in elements:
             raise ValueError('invalid initialization element: {}'.format(initialize))
         elem_dict = {k:v for v,k in enumerate(elements)}
@@ -31,15 +31,14 @@ class Analyse:
             self.heart = self.image.get_data('heart')
         if elem_dict[initialize] >= elem_dict['white']:
             self.image.run_cluster('white', **self.parameters['white'])
-        if elem_dict[initialize] >= elem_dict['left']:
             self.left = self.image.get_data('white', self.image.get_index('left'))
-        if elem_dict[initialize] >= elem_dict['right']:
             self.right = self.image.get_data('white', self.image.get_index('right'))
         if elem_dict[initialize] >= elem_dict['scar']:
             self.tissue = Tissue(
                 img=self.get_image(),
                 total_area=self.image.get_area('heart'),
-                white_areas=self.image.cluster['white']
+                white_areas=self.image.cluster['white'],
+                **self.parameters['tissue']
             )
         if elem_dict[initialize] >= elem_dict['ventricle']:
             self.run_left_ventricle()

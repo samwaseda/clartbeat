@@ -10,7 +10,6 @@ class Tissue:
         img,
         total_area,
         white_areas=None,
-        n_components=9,
         scar_coeff=np.array([
             2.69008370e-02,
             -1.16449179e+02,
@@ -34,7 +33,7 @@ class Tissue:
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
-        self._classify_labels(coeff=scar_coeff)
+        self._classify_labels(coeff=np.array(scar_coeff))
 
     @property
     def _has_colors(self):
@@ -125,13 +124,6 @@ class Tissue:
         all_positions = np.rint(
             np.einsum('k,nj->knj', dist_range, v)+total_perimeter
         ).astype(int)
-        tree_peri = cKDTree(total_perimeter)
-        tree_scar = cKDTree(self.get_area('scar'))
-        mat = tree_peri.sparse_distance_matrix(tree_scar, max_distance=max_dist-1)
-        coo = mat.tocoo()
-        data = coo.data
-        data[data>0] += 0.5
-        data = data.astype(int)
         all_diff = ndimage.gaussian_filter1d(
             img_diff[all_positions.T[0], all_positions.T[1]],
             sigma=sigma_reliability,
@@ -148,6 +140,13 @@ class Tissue:
         local_reliability = get_slope(all_diff, tissue_ratio)*get_slope(all_total, total_density_range)
         local_reliability *= total_reliability.max(axis=-1)[:,None]
         prob = np.zeros(len(self.get_area('scar')))
+        tree_peri = cKDTree(total_perimeter)
+        tree_scar = cKDTree(self.get_area('scar'))
+        mat = tree_peri.sparse_distance_matrix(tree_scar, max_distance=max_dist-1)
+        coo = mat.tocoo()
+        data = coo.data
+        data[data>0] += 0.5
+        data = data.astype(int)
         np.maximum.at(prob, np.array(coo.col), local_reliability[coo.row][np.arange(len(data)), data])
         return prob
 

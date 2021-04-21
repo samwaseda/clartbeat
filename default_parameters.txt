@@ -51,11 +51,21 @@
         "size": 6,
         "apply_filter": true
     },
-    "scar": {
-        "clustering": {
-            "n_components": 30,
-            "max_mean_dist": 3,
-            "color_enhancement": 10
-        }
+    "tissue": {
+        "scar_coeff": [
+            0.026900837,
+            -116.449179,
+            -58.8774824,
+            65.0569742,
+            60.2359123,
+            76.3830882,
+            5.55613592
+        ],
+        "sigmas": [
+            4
+        ],
+        "color_enhancement": 10,
+        "filter_size": 6,
+        "fill_white": true
     }
 }
