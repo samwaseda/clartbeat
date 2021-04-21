@@ -1,11 +1,5 @@
 import numpy as np
 
-def apot(x, x0=0, length=1, ptp=[0, 1], center=None, slope=None):
-    if center is not None and slope is not None:
-        ptp = np.array([-2, 2])*slope*length+center
-    slope = 1/length
-    return (ptp[1]-ptp[0])/(1+np.exp(-slope*x))+ptp[0]
-
 def get_slope(x, x_interval):
     x0 = np.mean(x_interval)
     dx = np.diff(x_interval)[0]/2
