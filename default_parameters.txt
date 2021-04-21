@@ -1,0 +1,61 @@
+{
+    "processing": {
+        "resolution": 0.000486,
+        "target_size": 1000000,
+        "erase_edge": 10,
+        "elastic_net": {
+            "sigma_sobel": 15,
+            "sigma_gauss": 5,
+            "line_tension": 0.2,
+            "dt": 0.1,
+            "max_iter": 1000,
+            "max_gradient": 0.1
+        },
+        "clean_noise": {
+            "eps": 5
+        },
+        "white_color": {
+            "value": null,
+            "bins": 100,
+            "min_value": 175
+        },
+        "canny_edge": {
+            "sigma": 18.684489401039166,
+            "low": 6.157785258898054,
+            "high": 7.670065207650683
+        },
+        "total_area": {
+            "number_of_points": 360,
+            "sigma": 0.05,
+            "height_unit": 40,
+            "min_fraction": 0.05
+        },
+        "ridge": {
+            "sigmas": [
+                4
+            ],
+            "threshold": 0.5
+        },
+        "stich_high_angles": {
+            "sigma": 5,
+            "max_angle": 0.045
+        }
+    },
+    "heart": {
+        "eps": 3,
+        "size": 1,
+        "apply_filter": true
+    },
+    "white": {
+        "eps": 3,
+        "size": 6,
+        "apply_filter": true
+    },
+    "scar": {
+        "clustering": {
+            "n_components": 30,
+            "max_mean_dist": 3,
+            "color_enhancement": 10
+        }
+    }
+}

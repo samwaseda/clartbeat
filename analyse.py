@@ -3,11 +3,16 @@ from process import ProcessImage
 from tissue import Tissue
 from area import Area
 from scipy.optimize import minimize
+import json
 
 class Analyse:
-    def __init__(self, file_name, initialize='all'):
+    def __init__(self, file_name, parameters=None, initialize='all'):
+        if parameters is None:
+            with open('default_parameters.txt', 'r') as f:
+                parameters = json.load(f)
+        self.parameters = parameters
         self._data = {}
-        self.image = ProcessImage(file_name=file_name)
+        self.image = ProcessImage(file_name=file_name, parameters=self.parameters['processing'])
         self.initialize(initialize=initialize)
 
     def get_base_color(self, mean=True):
@@ -17,26 +22,26 @@ class Analyse:
         return self.image.get_original(reduction=reduction)
 
     def initialize(self, initialize='all'):
-        elements = np.array(['heart', 'white', 'left', 'right', 'scar', 'ventricle'])
-        count = np.inf
-        if np.any(elements==initialize):
-            count = np.where(elements==initialize)[0][0]+1
-        if count > 0:
-            self.image.run_cluster('heart')
+        elements = np.array(['none', 'heart', 'white', 'left', 'right', 'scar', 'ventricle', 'all'])
+        if initialize not in elements:
+            raise ValueError('invalid initialization element: {}'.format(initialize))
+        elem_dict = {k:v for v,k in enumerate(elements)}
+        if elem_dict[initialize] >= elem_dict['heart']:
+            self.image.run_cluster('heart', **self.parameters['heart'])
             self.heart = self.image.get_data('heart')
-        if count > 1:
-            self.image.run_cluster('white')
-        if count > 2:
+        if elem_dict[initialize] >= elem_dict['white']:
+            self.image.run_cluster('white', **self.parameters['white'])
+        if elem_dict[initialize] >= elem_dict['left']:
             self.left = self.image.get_data('white', self.image.get_index('left'))
-        if count > 3:
+        if elem_dict[initialize] >= elem_dict['right']:
             self.right = self.image.get_data('white', self.image.get_index('right'))
-        if count > 4:
+        if elem_dict[initialize] >= elem_dict['scar']:
             self.tissue = Tissue(
                 img=self.get_image(),
                 total_area=self.image.get_area('heart'),
                 white_areas=self.image.cluster['white']
             )
-        if count > 5:
+        if elem_dict[initialize] >= elem_dict['ventricle']:
             self.run_left_ventricle()
 
     @property

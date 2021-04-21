@@ -22,7 +22,7 @@ def get_minim_white(img, x_min=400, sigma=4):
         x_min -= dhdx/np.absolute(ddhddx)
     return x_min
 
-def get_white_color_threshold(img, bins=100, min_value=175):
+def get_white_color_threshold(img, bins=100, min_value=175, **args):
     norm = img
     if len(norm.shape)==3 and norm.shape[-1]==3:
         norm = np.mean(img, axis=-1)
@@ -35,6 +35,8 @@ def get_white_color_threshold(img, bins=100, min_value=175):
 
 def cleanse_edge(img, erase_edge=10):
     img_new = img.copy()
+    if erase_edge==0:
+        return img_new
     img_new[:erase_edge,:,:] = np.array(3*[255])
     img_new[:,:erase_edge,:] = np.array(3*[255])
     img_new[-erase_edge:,:,:] = np.array(3*[255])
@@ -49,18 +51,12 @@ def _clean_noise(img, threshold, eps=5):
     img[y[:,0], y[:,1]] = np.array(3*[255])
     return img
 
-def get_edge(img, base, parameters=None):
-    if parameters is None:
-        parameters = {
-            'sigma': 18.684489401039166,
-            'low': 6.157785258898054,
-            'high': 7.670065207650683
-        }
+def get_edge(img, base, sigma=18.684, low=6.1578, high=7.6701):
     return skimage.feature.canny(
         image=img,
-        sigma=parameters['sigma'],
-        low_threshold=parameters['low']*base,
-        high_threshold=parameters['high']*base,
+        sigma=sigma,
+        low_threshold=low*base,
+        high_threshold=high*base,
     )
 
 def get_local_linear_fit(y_i, x_i, w):
@@ -76,49 +72,42 @@ class ProcessImage:
     def __init__(
         self,
         file_name,
-        resolution=0.000486,
-        target_size=1e6,
-        white_color_threshold=None,
-        erase_edge=10,
-        clean_noise=True,
-        stich_high_angles=True,
-        elastic_net=True,
+        parameters,
     ):
-        self.file_name = file_name
-        img = mpimg.imread(file_name)
-        self._reduction = np.rint(np.sqrt(np.prod(img.shape[:2])/target_size)).astype(int)
-        self._reduction = np.max([1, self._reduction])
-        img = img[::self._reduction,::self._reduction]
-        self.resolution = (resolution*self._reduction)**2
-        self._norm = None
-        if erase_edge > 0:
-            self._img = cleanse_edge(img=img, erase_edge=erase_edge)
-        else:
-            self._img = img
-        if white_color_threshold is None:
-            white_color_threshold = get_white_color_threshold(self._img)
-        self.white_color_threshold = white_color_threshold
-        if clean_noise:
-            self._img = _clean_noise(self._img, white_color_threshold)
         self._clustering = {}
         self.cluster = {}
-        self.resolution = resolution
-        edge = get_edge(self.get_image(mean=True), self.get_base_color()/255)
-        self.run_total_area(np.stack(np.where(edge), axis=-1))
-        if stich_high_angles:
-            self.stich_high_angles()
-        if elastic_net:
-            self.run_elastic_net()
+        self.file_name = file_name
+        img = mpimg.imread(file_name)
+        self._reduction = np.rint(np.sqrt(np.prod(img.shape[:2])/parameters['target_size'])).astype(int)
+        self._reduction = np.max([1, self._reduction])
+        img = img[::self._reduction,::self._reduction]
+        self.resolution = (parameters['resolution']*self._reduction)**2
+        self._norm = None
+        self._img = cleanse_edge(img=img, erase_edge=parameters['erase_edge'])
+        white_color_threshold = parameters['white_color']['value']
+        if white_color_threshold is None:
+            white_color_threshold = get_white_color_threshold(self._img, **parameters['white_color'])
+        self.white_color_threshold = white_color_threshold
+        self._img = _clean_noise(
+            self._img,
+            white_color_threshold,
+            eps=parameters['clean_noise']['eps']
+        )
+        edge = get_edge(self.get_image(mean=True), self.get_base_color()/255, **parameters['canny_edge'])
+        self.run_total_area(np.stack(np.where(edge), axis=-1), **parameters['total_area'])
+        self.stich_high_angles(**parameters['stich_high_angles'])
+        self.run_elastic_net(**parameters['elastic_net'])
         self.determine_total_area()
 
     def run_total_area(
         self,
         points,
-        x_range=np.linspace(0, 2*np.pi, 360, endpoint=False),
+        number_of_points=360,
         sigma=0.05,
         height_unit=40,
         min_fraction=0.05
     ):
+        x_range=np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
         dbscan = DBSCAN(eps=5).fit(points)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]
@@ -158,10 +147,11 @@ class ProcessImage:
 
     def stich_high_angles(
         self,
-        run_all=True,
-        sigma_angle=5,
+        sigma=5,
         max_angle=0.045,
     ):
+        if max_angle > 0.5*np.pi or max_angle < 0:
+            return
         v = self.total_perimeter.copy()
         v -= np.roll(v, -1, axis=0)
         v_norm = np.linalg.norm(v, axis=-1)
@@ -169,7 +159,7 @@ class ProcessImage:
         sin[0] = sin[-1] = 0
         self._edged_total_perimeter = self.total_perimeter.copy()
         total_number = len(self.total_perimeter)
-        high_angles = ndimage.gaussian_filter1d(sin, sigma=sigma_angle)>max_angle
+        high_angles = ndimage.gaussian_filter1d(sin, sigma=sigma)>max_angle
         high_angles = np.arange(len(high_angles))[high_angles]
         if len(high_angles)<2:
             return
@@ -200,6 +190,8 @@ class ProcessImage:
         max_iter=1000,
         max_gradient=0.1,
     ):
+        if max_iter < 1:
+            return
         sobel = filters.sobel(
             ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_sobel)
         )
@@ -364,8 +356,8 @@ class ProcessImage:
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
                 continue
             self.cluster[key].append(xx)
-    
-    def run_cluster(self, key, eps=3, min_samples=2, size=None, apply_filter=True):
+
+    def run_cluster(self, key, eps=3, size=None, apply_filter=True):
         if key not in ['white', 'heart']:
             raise ValueError('key must be white or heart')
         if size is None and key=='white':
@@ -377,7 +369,7 @@ class ProcessImage:
         elif apply_filter and key=='heart':
             self.apply_maximum(size=size)
         leere = np.stack(np.where(self.get_area(key)), axis=-1)
-        self._clustering[key] = DBSCAN(eps=eps, min_samples=min_samples).fit(leere)
+        self._clustering[key] = DBSCAN(eps=eps).fit(leere) # min_samples = 2 ?
         self._sort(key, size=size)
 
     def get_points(self, key, index=0):
