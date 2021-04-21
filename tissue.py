@@ -74,8 +74,8 @@ class Tissue:
     def _classify_labels(self, coeff):
         colors = self.img[self.positions[:,0], self.positions[:,1]]
         base_color = np.mean(colors, axis=0)
-        values = np.sum(colors*coeff[:3], axis=-1)
-        values += np.sum(base_color*coeff[3:6])+coeff[-1]
+        values = np.sum(colors*coeff[3:6], axis=-1)
+        values += np.sum(base_color*coeff[:3])+coeff[-1]
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
         self.all_labels[values<0] = self._get_zones('scar')
 
