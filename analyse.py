@@ -52,7 +52,7 @@ class Analyse:
         ep = np.array([self.er[1], -self.er[0]])
         for i, t in enumerate([self.right, self.left]):
             x = t.points.copy().astype(float)
-            x -= self.left.get_center()
+            x -= self.heart.get_center()
             y = np.einsum('ij,nj->ni', np.stack((self.er, ep)), x)
             cond = np.absolute(y[:,1])<max_dist
             if np.sum(cond)==0:

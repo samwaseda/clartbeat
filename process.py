@@ -318,11 +318,6 @@ class ProcessImage:
             ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
             ratios[left[left<max_search]] = 0
             ratios *= np.array([len(xx)for xx in cluster])
-            points = self.cluster['heart'][0]
-            center = points.mean(axis=0)
-            farthest_point = points[np.mean(points-center, axis=-1).argmax()]
-            distances = np.array([np.linalg.norm(farthest_point-np.mean(xx, axis=0), axis=-1) for xx in cluster])
-            ratios /= 100+distances
             indices = [np.argmax(ratios)]
             if max_dist>0:
                 indices = self._find_neighbors('white', max_dist, indices, left, bias=np.array([1.,0.25]))
