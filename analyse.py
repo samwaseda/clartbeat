@@ -2,7 +2,7 @@ import numpy as np
 from process import ProcessImage
 from tissue import Tissue
 from area import Area
-from scipy.optimize import minimize
+from left_ventricle import LeftVentricle
 import json
 
 class Analyse:
@@ -41,7 +41,7 @@ class Analyse:
                 **self.parameters['tissue']
             )
         if elem_dict[initialize] >= elem_dict['ventricle']:
-            self.run_left_ventricle()
+            self.left_ventricle = LeftVentricle(self)
 
     @property
     def data(self):
@@ -65,45 +65,4 @@ class Analyse:
 
     def get_image(self, mean=False):
         return self.image.get_image(mean=mean)
-
-    @property
-    def er(self):
-        if 'vec_H_RV' not in self.data.keys():
-            self.data['vec_H_RV'] = self.right.get_center()-self.heart.get_center()
-        return self.data['vec_H_RV']/np.linalg.norm(self.data['vec_H_RV'])
-
-    def get_optimum_radius(self):
-        center = self.heart.get_center()
-        def error_f(r, er=self.er, center=center, points=self.right.points):
-            return np.sum(np.absolute(np.linalg.norm(points-(r[0]*er+center), axis=-1)-r[1]))
-        opt = minimize(error_f, [1, 100], method='Nelder-Mead')
-        return opt
-
-    def run_left_ventricle(self, reduced=True, use_pca=True, k_ratio=1):
-        points = self.heart.get_points(reduced=True)
-        if use_pca:
-            a = np.linalg.norm(self.heart.get_principal_vectors()[0])
-        else:
-            a = np.max(np.einsum('i,ni->n', self.er, points-self.heart.get_center()))
-        dx = a-np.linalg.norm(self.heart.get_center()-self.right.get_center(ref_point=self.heart.get_center()))
-        x_t = a-2*dx
-        edges = self.get_edges()
-        x_m = np.absolute(np.mean(edges))
-        if reduced and x_m!=0:
-            l = np.absolute((edges[1]-edges[0])/np.mean(edges))
-            x_opt = (x_m+k_ratio*l*x_t)/(1+k_ratio*l)*self.er+self.heart.get_center()
-        else:
-            x_opt = np.max([x_t, x_m])*self.er+self.heart.get_center()
-        opt_r = self.get_optimum_radius().x[0]
-        if opt_r < a:
-            opt_r = a
-        max_r = 2*np.linalg.norm(self.heart.get_center()-self.right.get_center(ref_point=self.heart.get_center()))
-        if opt_r > max_r or not reduced:
-            opt_r = max_r
-        x_c = x_opt-opt_r*self.er
-        x = points[np.linalg.norm(points-x_c, axis=-1)<opt_r]
-        left_ventricle = Area(x, resolution=self.image.resolution)
-        left_ventricle.center = x_c
-        left_ventricle.radius = opt_r
-        self.ventricle = left_ventricle
 
