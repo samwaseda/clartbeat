@@ -289,7 +289,7 @@ class ProcessImage:
 
     def _find_neighbors(self, key, max_dist, indices, indices_to_avoid=None, bias=None, max_angle=45/180*np.pi):
         x = self.cluster[key][indices[0]].copy()
-        if self._get_max_angle(x) > max_angle:
+        if max_angle is not None and self._get_max_angle(x) > max_angle:
             return indices
         if bias is not None: 
             x = self._get_biased_coordinates(x, bias)
@@ -311,17 +311,21 @@ class ProcessImage:
             s = np.array([len(xx) for xx in cluster])
             indices = [np.argmin(np.linalg.norm(x-self.cluster['heart'][0].mean(axis=0), axis=-1)/s)]
             if max_dist>0:
-                indices = self._find_neighbors('white', max_dist, indices)
-            return indices
+                indices = self._find_neighbors('white', max_dist, indices, max_angle=None)
         elif ventricle=='right':
             left = np.array(self.get_index(ventricle='left', max_dist=max_dist, max_search=max_search))
             ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
             ratios[left[left<max_search]] = 0
             ratios *= np.array([len(xx)for xx in cluster])
+            heart_center = self.cluster['heart'][0].mean(axis=0)
+            distances = np.array([
+                np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
+            ])
+            ratios *= np.log(distances)
             indices = [np.argmax(ratios)]
             if max_dist>0:
                 indices = self._find_neighbors('white', max_dist, indices, left, bias=np.array([1.,0.25]))
-            return indices
+        return indices
 
     @property
     def _threshold(self):

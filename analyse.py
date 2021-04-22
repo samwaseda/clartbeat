@@ -47,22 +47,6 @@ class Analyse:
     def data(self):
         return self._data
 
-    def get_edges(self, max_dist=10):
-        edges = []
-        ep = np.array([self.er[1], -self.er[0]])
-        for i, t in enumerate([self.right, self.left]):
-            x = t.points.copy().astype(float)
-            x -= self.heart.get_center()
-            y = np.einsum('ij,nj->ni', np.stack((self.er, ep)), x)
-            cond = np.absolute(y[:,1])<max_dist
-            if np.sum(cond)==0:
-                return np.zeros(2)
-            if i==0:
-                edges.append(y[cond, 0].min())
-            else:
-                edges.append(y[cond, 0].max())
-        return edges
-
     def get_image(self, mean=False):
         return self.image.get_image(mean=mean)
 
