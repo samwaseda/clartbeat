@@ -107,7 +107,7 @@ class ProcessImage:
         height_unit=40,
         min_fraction=0.05
     ):
-        x_range=np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
+        x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
         dbscan = DBSCAN(eps=5).fit(points)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]

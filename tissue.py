@@ -23,6 +23,7 @@ class Tissue:
         color_enhancement=10,
         filter_size=6,
         fill_white=True,
+        number_of_recursion=3,
     ):
         self._data = {}
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])
@@ -33,7 +34,7 @@ class Tissue:
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
-        self._classify_labels(coeff=np.array(scar_coeff))
+        self._classify_labels(coeff=np.array(scar_coeff), number_of_recursion=number_of_recursion)
 
     @property
     def _has_colors(self):
@@ -71,12 +72,15 @@ class Tissue:
     def _get_zones(self, name):
         return np.where(self._names==name)[0][0]
 
-    def _classify_labels(self, coeff):
+    def _classify_labels(self, coeff, number_of_recursion=3):
         colors = self.img[self.positions[:,0], self.positions[:,1]]
         base_color = np.mean(colors, axis=0)
-        values = np.sum(colors*coeff[3:6], axis=-1)
-        values += np.sum(base_color*coeff[:3])+coeff[-1]
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
+        for _ in range(number_of_recursion):
+            values = np.sum(colors*coeff[3:6], axis=-1)
+            values += np.sum(base_color*coeff[:3])+coeff[-1]
+            base_color = np.mean(colors[values>=0], axis=0)
+        self.all_labels[values>=0] = self._get_zones('muscle')
         self.all_labels[values<0] = self._get_zones('scar')
 
     def get_area(self, key):

@@ -6,6 +6,7 @@ from scipy.spatial import cKDTree
 from collections import defaultdict
 import random
 import pandas as pd
+import matplotlib.pylab as plt
 
 class CalibrateColors(Learn):
     def __init__(self, **arg):
@@ -71,13 +72,13 @@ class CalibrateColors(Learn):
             self.check_wrinkle = False
         self.proceed()
 
-    def _get_individual_distances(self, coeff, muscle, max_dist=255**2):
+    def _get_individual_distances(self, clf, muscle, max_dist=255**2):
         if not hasattr(clf, 'coef_'):
             return len(self.data['tag'])*[max_dist]
         values = np.sum(clf.coef_*np.concatenate([
             self.get_base_colors(muscle=muscle),
             np.array(self.data['colors'])
-        ], axis=-1), axis=-1)-clf.intercept_
+        ], axis=-1), axis=-1)/np.linalg.norm(clf.coef_)+clf.intercept_
         return np.absolute(values)
 
     def get_distances(self):
