@@ -1,9 +1,14 @@
 import numpy as np
 
-def get_slope(x, x_interval):
+def _get_slope(x, x_interval):
     x0 = np.mean(x_interval)
     dx = np.diff(x_interval)[0]/2
     return 1/(1+np.exp(-(x-x0)*np.log(10)/dx))
+
+def get_slope(x, x_interval, symmetric=False):
+    if symmetric:
+        return _get_slope(x, x_interval)*_get_slope(x, x_interval[::-1])
+    return _get_slope(x, x_interval)
 
 def damp(x, x0=0, length=1, slope=1):
     xx = slope*(x-x0)/length*2

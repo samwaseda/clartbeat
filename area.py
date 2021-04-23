@@ -4,10 +4,11 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.decomposition import PCA
 
 class Area:
-    def __init__(self, points, resolution):
+    def __init__(self, points):
+        if points is None:
+            return None
         self.points = points
         self._initialize_pca()
-        self.resolution = resolution
         self._delaunay = None
 
     @property
@@ -115,13 +116,13 @@ class Area:
     def get_volume(self, mode='hull', reduced=True, max_distance=10, keep_intern=True):
         if mode=='hull':
             x = self.get_points(reduced=reduced)
-            return ConvexHull(x).volume*self.resolution
+            return ConvexHull(x).volume
         elif mode=='delaunay':
             y = self.points[self.get_delaunay_triangles(max_distance=max_distance, keep_intern=keep_intern)]
             y = y[:,1:]-y[:,:1]
             y = np.absolute(np.cross(y[:,0], y[:,1]))
-            return np.sum(y)/2*self.resolution
+            return np.sum(y)/2
         elif mode=='points':
-            return len(self.points)*self.resolution
+            return len(self.points)
         else:
             raise ValueError('mode not recognized')

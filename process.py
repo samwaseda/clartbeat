@@ -76,14 +76,14 @@ class ProcessImage:
     ):
         self._clustering = {}
         self.cluster = {}
+        self._reduction = None
         self.file_name = file_name
-        img = mpimg.imread(file_name)
-        self._reduction = np.rint(np.sqrt(np.prod(img.shape[:2])/parameters['target_size'])).astype(int)
-        self._reduction = np.max([1, self._reduction])
-        img = img[::self._reduction,::self._reduction]
-        self.resolution = (parameters['resolution']*self._reduction)**2
         self._norm = None
-        self._img = cleanse_edge(img=img, erase_edge=parameters['erase_edge'])
+        self._img = cleanse_edge(
+            img=self.load_image(target_size=parameters['target_size']),
+            erase_edge=parameters['erase_edge']
+        )
+        self.resolution = (parameters['resolution']*self._reduction)**2
         white_color_threshold = parameters['white_color']['value']
         if white_color_threshold is None:
             white_color_threshold = get_white_color_threshold(self._img, **parameters['white_color'])
@@ -98,6 +98,25 @@ class ProcessImage:
         self.stich_high_angles(**parameters['stich_high_angles'])
         self.run_elastic_net(**parameters['elastic_net'])
         self.determine_total_area()
+
+    def load_image(self, file_name=None, reduction=None, target_size=None):
+        if file_name is None and not hasattr(self, 'file_name'):
+            raise ValueError('file_name not specified')
+        if file_name is None:
+            file_name = self.file_name
+        img = mpimg.imread(file_name)
+        if target_size is not None:
+            reduction = np.rint(np.sqrt(np.prod(img.shape[:2])/target_size)).astype(int)
+            reduction = np.max([1, reduction])
+            if self._reduction is None:
+                self._reduction = reduction
+        if reduction is None:
+            reduction = self._reduction
+        return img[::reduction,::reduction]
+
+    @property
+    def non_white_points(self):
+        return np.mean(self.load_image(), axis=-1) < self.white_color_threshold
 
     def run_total_area(
         self,
@@ -156,7 +175,6 @@ class ProcessImage:
         v -= np.roll(v, -1, axis=0)
         v_norm = np.linalg.norm(v, axis=-1)
         sin = np.arcsin(np.cross(v, np.roll(v, 1, axis=0))/(v_norm*np.roll(v_norm, 1)))
-        sin[0] = sin[-1] = 0
         self._edged_total_perimeter = self.total_perimeter.copy()
         total_number = len(self.total_perimeter)
         high_angles = ndimage.gaussian_filter1d(sin, sigma=sigma)>max_angle
@@ -176,10 +194,20 @@ class ProcessImage:
             indices = np.roll(indices, 1)
         self.total_perimeter = np.roll(self.total_perimeter, -indices[0], axis=0)
         indices = (np.diff(indices)+total_number)[0]%total_number
-        dr = (np.arange(indices)/indices)[:,None]*(
-            self.total_perimeter[indices]-self.total_perimeter[0]
-        )
+        i_range = np.arange(indices)/indices
+        dr = i_range[:,None]*(self.total_perimeter[indices]-self.total_perimeter[0])
         self.total_perimeter[:indices] = dr+self.total_perimeter[0]
+        center = np.mean(self.total_perimeter, axis=0)
+        r_a = np.linalg.norm(self.total_perimeter[0]-center)
+        r_b = np.linalg.norm(self.total_perimeter[indices]-center)
+        inner_prod = np.dot(self.total_perimeter[0]-center, self.total_perimeter[indices]-center)
+        magnifier = i_range*r_a+(1-i_range)*r_b
+        magnifier /= np.sqrt(
+            i_range**2*r_a**2+(1-i_range)**2*r_b**2+2*i_range*(1-i_range)*inner_prod
+        )
+        self.total_perimeter[:indices] = magnifier[:,None]*(self.total_perimeter[:indices]-center)
+        self.total_perimeter[:indices] += center
+        self.total_perimeter[:indices] 
 
     def run_elastic_net(
         self,
@@ -189,13 +217,14 @@ class ProcessImage:
         dt=0.1,
         max_iter=1000,
         max_gradient=0.1,
+        repel_strength=0.01,
     ):
         if max_iter < 1:
             return
         sobel = filters.sobel(
             ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_sobel)
         )
-        gauss = 0.01*ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_gauss)
+        gauss = repel_strength*ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_gauss)
         f_sobel_x = sobel-np.roll(sobel, -1, axis=0)
         f_sobel_y = sobel-np.roll(sobel, -1, axis=1)
         f_gauss_x = gauss-np.roll(gauss, -1, axis=0)
@@ -223,12 +252,6 @@ class ProcessImage:
         if mean:
             return np.mean(self._img[mean_color<self.white_color_threshold])
         return np.mean(self._img[mean_color<self.white_color_threshold], axis=0)
-
-    def get_original(self, reduction=None):
-        img = mpimg.imread(self.file_name)
-        if reduction is not None:
-            img = img[::int(reduction),::int(reduction)]
-        return img
 
     @property
     def norm(self):
@@ -287,7 +310,9 @@ class ProcessImage:
         phi *= bias[1]
         return np.stack((r*np.cos(phi), r*np.sin(phi)), axis=-1)
 
-    def _find_neighbors(self, key, max_dist, indices, indices_to_avoid=None, bias=None, max_angle=45/180*np.pi):
+    def _find_neighbors(
+        self, key, max_dist, indices, indices_to_avoid=None, bias=None, max_angle=45/180*np.pi
+    ):
         x = self.cluster[key][indices[0]].copy()
         if max_angle is not None and self._get_max_angle(x) > max_angle:
             return indices
@@ -303,28 +328,53 @@ class ProcessImage:
                 continue
             indices.append(ii) 
         return indices
-        
-    def get_index(self, ventricle='left', max_search=5, max_dist=5, bias=np.ones(2)):
+
+    @property
+    def total_mean_radius(self):
+        return np.sqrt(np.sum(self.total_area)/np.pi)
+
+    def _satisfies_criteria(self, size, dist, dist_interval=None, fraction_interval=None):
+        if dist_interval is None or fraction_interval is None:
+            return True
+        fraction_criterion = get_slope(size/np.sum(self.total_area), fraction_interval)
+        dist_criterion = get_slope(dist/self.total_mean_radius, dist_interval)
+        return np.any(fraction_criterion*dist_criterion > 0.5)
+
+    def get_index(
+        self,
+        ventricle='left',
+        max_search=5,
+        max_dist=5,
+        bias=np.ones(2),
+        dist_interval=None,
+        fraction_interval=None,
+        indices_to_avoid=None,
+    ):
         cluster = self.cluster['white'][:max_search]
+        heart_center = self.cluster['heart'][0].mean(axis=0)
+        distances = np.array([
+            np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
+        ])
+        size = np.array([len(xx) for xx in cluster])
+        if not self._satisfies_criteria(size, distances, dist_interval, fraction_interval):
+            return None
         if ventricle=='left':
             x = np.array([xx.mean(axis=0) for xx in cluster])
-            s = np.array([len(xx) for xx in cluster])
-            indices = [np.argmin(np.linalg.norm(x-self.cluster['heart'][0].mean(axis=0), axis=-1)/s)]
+            indices = [
+                np.argmin(np.linalg.norm(x-self.cluster['heart'][0].mean(axis=0), axis=-1)/size)
+            ]
             if max_dist>0:
                 indices = self._find_neighbors('white', max_dist, indices, max_angle=None)
         elif ventricle=='right':
-            left = np.array(self.get_index(ventricle='left', max_dist=max_dist, max_search=max_search))
             ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
-            ratios[left[left<max_search]] = 0
-            ratios *= np.array([len(xx)for xx in cluster])
-            heart_center = self.cluster['heart'][0].mean(axis=0)
-            distances = np.array([
-                np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
-            ])
+            ratios[indices_to_avoid[indices_to_avoid<max_search]] = 0
+            ratios *= size
             ratios *= np.log(distances)
             indices = [np.argmax(ratios)]
             if max_dist>0:
-                indices = self._find_neighbors('white', max_dist, indices, left, bias=np.array([1.,0.25]))
+                indices = self._find_neighbors(
+                    'white', max_dist, indices, indices_to_avoid, bias=np.array(bias)
+                )
         return indices
 
     @property
@@ -380,5 +430,7 @@ class ProcessImage:
         return x
 
     def get_data(self, key, index=0):
-        return Area(self.get_points(key, index), resolution=self.resolution)
+        if index is None:
+            return None
+        return Area(self.get_points(key, index))
 

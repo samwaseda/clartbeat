@@ -6,10 +6,11 @@
         "elastic_net": {
             "sigma_sobel": 15,
             "sigma_gauss": 5,
-            "line_tension": 0.2,
+            "line_tension": 0.1,
             "dt": 0.1,
             "max_iter": 1000,
-            "max_gradient": 0.1
+            "max_gradient": 0.1,
+            "repel_strength": 0.01
         },
         "clean_noise": {
             "eps": 5
@@ -51,15 +52,26 @@
         "size": 6,
         "apply_filter": true
     },
+    "left": {
+        "max_search": 5,
+        "max_dist": 5,
+	"dist_interval": [0.6, 0.4],
+	"fraction_interval": [0.001, 0.006]
+    },
+    "right": {
+        "max_search": 5,
+        "max_dist": 5,
+	"bias": [1, 0.25]
+    },
     "tissue": {
         "scar_coeff": [
-            6.50569742e+01, 
-            6.02359123e+01, 
-            7.63830882e+01,
-            2.69008370e-02,
-            -1.16449179e+02,
-            -5.88774824e+01,
-            5.55613592
+            402.39315134,
+            -24.25826189,
+            396.13580955,
+            -22.71553179,
+            -729.29756834,
+            -76.64275617,
+            36.86701706
         ],
         "sigmas": [
             4

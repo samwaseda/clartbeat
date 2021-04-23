@@ -112,7 +112,7 @@ class Tissue:
         sigma_image=5,
         sigma_reliability=3,
         max_dist=100,
-        total_reliability_ratio=[0.1, -0.1],
+        total_reliability_ratio=[-0.1, 0.1],
         tissue_limit_area=[60, 20],
         total_density_range=[0.25, 0.75],
         tissue_ratio=[0, -0.2],
