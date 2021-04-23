@@ -1,4 +1,4 @@
-from sklearn.linear_model import RidgeClassifierCV
+from sklearn.linear_model import SGDClassifier
 import numpy as np
 from sklearn.mixture import GaussianMixture
 from learn import Learn
@@ -18,8 +18,8 @@ class CalibrateColors(Learn):
         self.current_index = 0
         self.check_scar = False
         self.check_wrinkle = False
-        self.fit_scar = RidgeClassifierCV()
-        self.fit_wrinkle = RidgeClassifierCV()
+        self.fit_scar = SGDClassifier(warm_start=True)
+        self.fit_wrinkle = SGDClassifier(warm_start=True)
         self.choices = {
             'muscle': self.muscle,
             'scar': self.scar,
