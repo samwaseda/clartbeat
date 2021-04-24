@@ -27,7 +27,6 @@ class ProcessImage:
         self._total_area = None
         self.file_name = file_name
         self._img = None
-        self._norm = {}
         self.parameters = parameters
 
     @property
@@ -105,6 +104,11 @@ class ProcessImage:
         slope, intersection = get_local_linear_fit(y_i, x_i, w)
         xx = (slope*x_range+intersection)*np.cos(x_range)+mean[0]
         yy = (slope*x_range+intersection)*np.sin(x_range)+mean[1]
+        xx[xx<0] = 0
+        yy[yy<0] = 0
+        shape = self.get_image().shape[:-1]
+        xx[xx>=shape[0]] = shape[0]-1
+        yy[yy>=shape[1]] = shape[1]-1
         return np.stack([xx, yy], axis=-1)
 
     @property
@@ -221,6 +225,13 @@ class ProcessImage:
             f_gauss = np.stack((f_gauss_x[p[:,0], p[:,1]], f_gauss_y[p[:,0], p[:,1]]), axis=-1)
             f_total = f_spring+f_sobel+f_gauss
             self._elastic_net_perimeter -= f_total*dt
+            self._elastic_net_perimeter[self._elastic_net_perimeter<0] = 0
+            self._elastic_net_perimeter[
+                self._elastic_net_perimeter[:,0]>=gauss.shape[0], 0
+            ] = gauss.shape[0]-1
+            self._elastic_net_perimeter[
+                self._elastic_net_perimeter[:,1]>=gauss.shape[1], 1
+            ] = gauss.shape[1]-1
             if np.linalg.norm(f_total, axis=-1).max()<max_gradient:
                 break
 
