@@ -21,15 +21,14 @@ class ProcessImage:
         self.cluster = {}
         self._indices = {}
         self._reduction = None
-        self._canny_edge = None
+        self._canny_edge_all = None
+        self._canny_edge_perimeter = None
+        self._elastic_net_perimeter = None
+        self._total_area = None
         self.file_name = file_name
         self._img = None
         self._norm = {}
         self.parameters = parameters
-        self.run_total_area(**parameters['total_area'])
-        self.stich_high_angles(**parameters['stich_high_angles'])
-        self.run_elastic_net(**parameters['elastic_net'])
-        self.determine_total_area()
 
     @property
     def img(self):
@@ -69,14 +68,14 @@ class ProcessImage:
         return np.mean(self.load_image(), axis=-1) < self.white_color_threshold
 
     @property
-    def canny_edge(self):
-        if self._canny_edge is None:
-            self._canny_edge = get_edge(
+    def canny_edge_all(self):
+        if self._canny_edge_all is None:
+            self._canny_edge_all = get_edge(
             self.get_image(mean=True), self.get_base_color()/255, **self.parameters['canny_edge']
         )
-        return np.stack(np.where(self._canny_edge), axis=-1)
+        return np.stack(np.where(self._canny_edge_all), axis=-1)
 
-    def run_total_area(
+    def get_total_area(
         self,
         number_of_points=360,
         sigma=0.05,
@@ -85,17 +84,17 @@ class ProcessImage:
         min_fraction=0.05
     ):
         x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
-        dbscan = DBSCAN(eps=eps_areas).fit(self.canny_edge)
+        dbscan = DBSCAN(eps=eps_areas).fit(self.canny_edge_all)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]
-        hull = ConvexHull(self.canny_edge)
+        hull = ConvexHull(self.canny_edge_all)
         labels = labels[np.array([
             len(set(np.where(l==dbscan.labels_)[0]).intersection(hull.vertices))>0
             for l in labels
         ])]
         cond = np.any(labels[:,None]==dbscan.labels_, axis=0)
-        mean = np.median(self.canny_edge, axis=0)
-        p = self.canny_edge[cond]-mean
+        mean = np.median(self.canny_edge_all, axis=0)
+        p = self.canny_edge_all[cond]-mean
         x_i = np.arctan2(p[:,1], p[:,0])
         y_i = np.linalg.norm(p, axis=-1)
         x_i = np.concatenate((x_i-2*np.pi, x_i, x_i+2*np.pi))
@@ -106,7 +105,20 @@ class ProcessImage:
         slope, intersection = get_local_linear_fit(y_i, x_i, w)
         xx = (slope*x_range+intersection)*np.cos(x_range)+mean[0]
         yy = (slope*x_range+intersection)*np.sin(x_range)+mean[1]
-        self.total_perimeter = np.stack([xx, yy], axis=-1)
+        return np.stack([xx, yy], axis=-1)
+
+    @property
+    def canny_edge_perimeter(self):
+        if self._canny_edge_perimeter is None:
+            self._canny_edge_perimeter = self.get_total_area(**self.parameters['total_area'])
+            self._elastic_net_perimeter = self._canny_edge_perimeter.copy()
+        return self._canny_edge_perimeter
+
+    @property
+    def total_area(self):
+        if self._total_area is None:
+            self._total_area = self.determine_total_area()
+        return self._total_area
 
     def determine_total_area(self):
         canvas = np.ones_like(self.get_image(mean=True))
@@ -121,7 +133,7 @@ class ProcessImage:
         r = np.linalg.norm(x, axis=-1)
         angle = np.arctan2(x[:,1], x[:,0])
         argmin = np.argmin(np.absolute(canvas_angle[:,:,None]-angle[None,None,:]), axis=-1)
-        self.total_area = canvas_r<r[argmin]
+        return canvas_r<r[argmin]
 
     def stich_high_angles(
         self,
@@ -130,12 +142,11 @@ class ProcessImage:
     ):
         if max_angle > 0.5*np.pi or max_angle < 0:
             return
-        v = self.total_perimeter.copy()
+        v = self.canny_edge_perimeter.copy()
         v -= np.roll(v, -1, axis=0)
         v_norm = np.linalg.norm(v, axis=-1)
         sin = np.arcsin(np.cross(v, np.roll(v, 1, axis=0))/(v_norm*np.roll(v_norm, 1)))
-        self._edged_total_perimeter = self.total_perimeter.copy()
-        total_number = len(self.total_perimeter)
+        total_number = len(self.canny_edge_perimeter)
         high_angles = ndimage.gaussian_filter1d(sin, sigma=sigma)>max_angle
         high_angles = np.arange(len(high_angles))[high_angles]
         if len(high_angles)<2:
@@ -151,22 +162,32 @@ class ProcessImage:
             return
         if np.diff(indices)[0]>0.5*total_number:
             indices = np.roll(indices, 1)
-        self.total_perimeter = np.roll(self.total_perimeter, -indices[0], axis=0)
+        self._elastic_net_perimeter = np.roll(self._elastic_net_perimeter, -indices[0], axis=0)
         indices = (np.diff(indices)+total_number)[0]%total_number
         i_range = np.arange(indices)/indices
-        dr = i_range[:,None]*(self.total_perimeter[indices]-self.total_perimeter[0])
-        self.total_perimeter[:indices] = dr+self.total_perimeter[0]
-        center = np.mean(self.total_perimeter, axis=0)
-        r_a = np.linalg.norm(self.total_perimeter[0]-center)
-        r_b = np.linalg.norm(self.total_perimeter[indices]-center)
-        inner_prod = np.dot(self.total_perimeter[0]-center, self.total_perimeter[indices]-center)
+        dr = i_range[:,None]*(self._elastic_net_perimeter[indices]-self._elastic_net_perimeter[0])
+        self._elastic_net_perimeter[:indices] = dr+self._elastic_net_perimeter[0]
+        center = np.mean(self._elastic_net_perimeter, axis=0)
+        r_a = np.linalg.norm(self._elastic_net_perimeter[0]-center)
+        r_b = np.linalg.norm(self._elastic_net_perimeter[indices]-center)
+        inner_prod = np.dot(
+            self._elastic_net_perimeter[0]-center, self._elastic_net_perimeter[indices]-center
+        )
         magnifier = i_range*r_a+(1-i_range)*r_b
         magnifier /= np.sqrt(
             i_range**2*r_a**2+(1-i_range)**2*r_b**2+2*i_range*(1-i_range)*inner_prod
         )
-        self.total_perimeter[:indices] = magnifier[:,None]*(self.total_perimeter[:indices]-center)
-        self.total_perimeter[:indices] += center
-        self.total_perimeter[:indices] 
+        self._elastic_net_perimeter[:indices] = magnifier[:,None]*(
+            self._elastic_net_perimeter[:indices]-center
+        )
+        self._elastic_net_perimeter[:indices] += center
+
+    @property
+    def total_perimeter(self):
+        if self._elastic_net_perimeter is None:
+            self.stich_high_angles(**self.parameters['stich_high_angles'])
+            self.run_elastic_net(**self.parameters['elastic_net'])
+        return self._elastic_net_perimeter
 
     def run_elastic_net(
         self,
@@ -183,21 +204,23 @@ class ProcessImage:
         sobel = filters.sobel(
             ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_sobel)
         )
-        gauss = repel_strength*ndimage.gaussian_filter(self.get_image(mean=True), sigma=sigma_gauss)
+        gauss = repel_strength*ndimage.gaussian_filter(
+            self.get_image(mean=True), sigma=sigma_gauss
+        )
         f_sobel_x = sobel-np.roll(sobel, -1, axis=0)
         f_sobel_y = sobel-np.roll(sobel, -1, axis=1)
         f_gauss_x = gauss-np.roll(gauss, -1, axis=0)
         f_gauss_y = gauss-np.roll(gauss, -1, axis=1)
         for i in range(1000):
-            f_spring = 2*self.total_perimeter
-            f_spring -= np.roll(self.total_perimeter, 1, axis=0)
-            f_spring -= np.roll(self.total_perimeter, -1, axis=0)
+            f_spring = 2*self._elastic_net_perimeter
+            f_spring -= np.roll(self._elastic_net_perimeter, 1, axis=0)
+            f_spring -= np.roll(self._elastic_net_perimeter, -1, axis=0)
             f_spring *= line_tension
-            p = np.rint(self.total_perimeter).astype(int)
+            p = np.rint(self._elastic_net_perimeter).astype(int)
             f_sobel = np.stack((f_sobel_x[p[:,0], p[:,1]], f_sobel_y[p[:,0], p[:,1]]), axis=-1)
             f_gauss = np.stack((f_gauss_x[p[:,0], p[:,1]], f_gauss_y[p[:,0], p[:,1]]), axis=-1)
             f_total = f_spring+f_sobel+f_gauss
-            self.total_perimeter -= f_total*dt
+            self._elastic_net_perimeter -= f_total*dt
             if np.linalg.norm(f_total, axis=-1).max()<max_gradient:
                 break
 
