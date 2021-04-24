@@ -29,7 +29,8 @@
             "number_of_points": 360,
             "sigma": 0.05,
             "height_unit": 40,
-            "min_fraction": 0.05
+            "eps_areas": 5,
+            "min_fraction": 0.04
         },
         "ridge": {
             "sigmas": [

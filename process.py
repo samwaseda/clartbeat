@@ -124,16 +124,18 @@ class ProcessImage:
         number_of_points=360,
         sigma=0.05,
         height_unit=40,
+        eps_areas=5,
         min_fraction=0.05
     ):
         x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
-        dbscan = DBSCAN(eps=5).fit(points)
+        dbscan = DBSCAN(eps=eps_areas).fit(points)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]
         hull = ConvexHull(points)
-        labels = labels[
-            np.array([len(set(np.where(l==dbscan.labels_)[0]).intersection(hull.vertices))>0 for l in labels])
-        ]
+        labels = labels[np.array([
+            len(set(np.where(l==dbscan.labels_)[0]).intersection(hull.vertices))>0
+            for l in labels
+        ])]
         cond = np.any(labels[:,None]==dbscan.labels_, axis=0)
         mean = np.median(points, axis=0)
         p = points[cond]-mean
