@@ -4,69 +4,12 @@ from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from area import Area
-import matplotlib.image as mpimg
+import matplotlib.pylab as plt
 from scipy.spatial import ConvexHull
 import skimage.feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
 from tools import damp, get_slope
-
-def get_minim_white(img, x_min=400, sigma=4):
-    for _ in range(10):
-        dx = x_min-img
-        exp = np.exp(-dx**2/(2*sigma**2))
-        div = (np.sqrt(np.pi)*sigma)
-        h = exp.sum()/div
-        dhdx = -np.sum(dx*exp)/sigma**2/div
-        ddhddx = np.sum((-1/sigma**2+dx**2/sigma**4)*exp)/div
-        x_min -= dhdx/np.absolute(ddhddx)
-    return x_min
-
-def get_white_color_threshold(img, bins=100, min_value=175, **args):
-    norm = img
-    if len(norm.shape)==3 and norm.shape[-1]==3:
-        norm = np.mean(img, axis=-1)
-    if len(norm.shape)!=2:
-        raise ValueError('invalid norm shape')
-    v = np.rint(np.mean(img, axis=-1))
-    v = v[v>min_value]
-    l, c = np.unique(v, return_counts=True)
-    return l[c.argmin()]
-
-def cleanse_edge(img, erase_edge=10):
-    img_new = img.copy()
-    if erase_edge==0:
-        return img_new
-    img_new[:erase_edge,:,:] = np.array(3*[255])
-    img_new[:,:erase_edge,:] = np.array(3*[255])
-    img_new[-erase_edge:,:,:] = np.array(3*[255])
-    img_new[:,-erase_edge:,:] = np.array(3*[255])
-    return img_new
-
-def _clean_noise(img, threshold, eps=5):
-    x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)
-    cluster = DBSCAN(eps=eps).fit(x)
-    labels, counts = np.unique(cluster.labels_, return_counts=True)
-    y = x[cluster.labels_!=labels[counts.argmax()]]
-    img[y[:,0], y[:,1]] = np.array(3*[255])
-    return img
-
-def get_edge(img, base, sigma=18.684, low=6.1578, high=7.6701):
-    return skimage.feature.canny(
-        image=img,
-        sigma=sigma,
-        low_threshold=low*base,
-        high_threshold=high*base,
-    )
-
-def get_local_linear_fit(y_i, x_i, w):
-    w = w/w.sum(axis=1)[:,None]
-    wx = np.sum(w*x_i, axis=-1)
-    wy = np.sum(w*y_i, axis=-1)
-    wxx = np.sum(w*x_i**2, axis=-1)
-    wxy = np.sum(w*x_i*y_i, axis=-1)
-    w = np.sum(w, axis=-1)
-    return (w*wxy-wx*wy)/(wxx*w-wx**2), (-wx*wxy+wxx*wy)/(wxx*w-wx**2)
 
 class ProcessImage:
     def __init__(
@@ -76,6 +19,7 @@ class ProcessImage:
     ):
         self._clustering = {}
         self.cluster = {}
+        self._indices = {}
         self._reduction = None
         self.file_name = file_name
         self._norm = None
@@ -86,14 +30,18 @@ class ProcessImage:
         self.resolution = (parameters['resolution']*self._reduction)**2
         white_color_threshold = parameters['white_color']['value']
         if white_color_threshold is None:
-            white_color_threshold = get_white_color_threshold(self._img, **parameters['white_color'])
+            white_color_threshold = get_white_color_threshold(
+                self._img, **parameters['white_color']
+            )
         self.white_color_threshold = white_color_threshold
         self._img = _clean_noise(
             self._img,
             white_color_threshold,
             eps=parameters['clean_noise']['eps']
         )
-        edge = get_edge(self.get_image(mean=True), self.get_base_color()/255, **parameters['canny_edge'])
+        edge = get_edge(
+            self.get_image(mean=True), self.get_base_color()/255, **parameters['canny_edge']
+        )
         self.run_total_area(np.stack(np.where(edge), axis=-1), **parameters['total_area'])
         self.stich_high_angles(**parameters['stich_high_angles'])
         self.run_elastic_net(**parameters['elastic_net'])
@@ -104,7 +52,7 @@ class ProcessImage:
             raise ValueError('file_name not specified')
         if file_name is None:
             file_name = self.file_name
-        img = mpimg.imread(file_name)
+        img = plt.imread(file_name)
         if target_size is not None:
             reduction = np.rint(np.sqrt(np.prod(img.shape[:2])/target_size)).astype(int)
             reduction = np.max([1, reduction])
@@ -352,6 +300,9 @@ class ProcessImage:
         fraction_interval=None,
         indices_to_avoid=None,
     ):
+        if ventricle=='right':
+            if 'left' in self._indices.keys() and self._indices['left'] is None:
+                return None
         cluster = self.cluster['white'][:max_search]
         heart_center = self.cluster['heart'][0].mean(axis=0)
         distances = np.array([
@@ -359,6 +310,7 @@ class ProcessImage:
         ])
         size = np.array([len(xx) for xx in cluster])
         if not self._satisfies_criteria(size, distances, dist_interval, fraction_interval):
+            self._indices[ventricle] = None
             return None
         if ventricle=='left':
             x = np.array([xx.mean(axis=0) for xx in cluster])
@@ -367,7 +319,10 @@ class ProcessImage:
             ]
             if max_dist>0:
                 indices = self._find_neighbors('white', max_dist, indices, max_angle=None)
+            self._indices['left'] = indices
         elif ventricle=='right':
+            if indices_to_avoid is None and 'left' in self._indices.keys():
+                indices_to_avoid = np.array(self._indices['left'])
             ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
             ratios[indices_to_avoid[indices_to_avoid<max_search]] = 0
             ratios *= size
@@ -424,6 +379,8 @@ class ProcessImage:
         self._sort(key, size=size)
 
     def get_points(self, key, index=0):
+        if index is None:
+            return np.array([])
         index = np.array([index]).flatten()
         x = self.cluster[key][index[0]]
         if len(index)>1:
@@ -432,7 +389,62 @@ class ProcessImage:
         return x
 
     def get_data(self, key, index=0):
-        if index is None:
-            return None
         return Area(self.get_points(key, index))
+
+def get_minim_white(img, x_min=400, sigma=4):
+    for _ in range(10):
+        dx = x_min-img
+        exp = np.exp(-dx**2/(2*sigma**2))
+        div = (np.sqrt(np.pi)*sigma)
+        h = exp.sum()/div
+        dhdx = -np.sum(dx*exp)/sigma**2/div
+        ddhddx = np.sum((-1/sigma**2+dx**2/sigma**4)*exp)/div
+        x_min -= dhdx/np.absolute(ddhddx)
+    return x_min
+
+def get_white_color_threshold(img, bins=100, min_value=175, **args):
+    norm = img
+    if len(norm.shape)==3 and norm.shape[-1]==3:
+        norm = np.mean(img, axis=-1)
+    if len(norm.shape)!=2:
+        raise ValueError('invalid norm shape')
+    v = np.rint(np.mean(img, axis=-1))
+    v = v[v>min_value]
+    l, c = np.unique(v, return_counts=True)
+    return l[c.argmin()]
+
+def cleanse_edge(img, erase_edge=10):
+    img_new = img.copy()
+    if erase_edge==0:
+        return img_new
+    img_new[:erase_edge,:,:] = np.array(3*[255])
+    img_new[:,:erase_edge,:] = np.array(3*[255])
+    img_new[-erase_edge:,:,:] = np.array(3*[255])
+    img_new[:,-erase_edge:,:] = np.array(3*[255])
+    return img_new
+
+def _clean_noise(img, threshold, eps=5):
+    x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)
+    cluster = DBSCAN(eps=eps).fit(x)
+    labels, counts = np.unique(cluster.labels_, return_counts=True)
+    y = x[cluster.labels_!=labels[counts.argmax()]]
+    img[y[:,0], y[:,1]] = np.array(3*[255])
+    return img
+
+def get_edge(img, base, sigma=18.684, low=6.1578, high=7.6701):
+    return skimage.feature.canny(
+        image=img,
+        sigma=sigma,
+        low_threshold=low*base,
+        high_threshold=high*base,
+    )
+
+def get_local_linear_fit(y_i, x_i, w):
+    w = w/w.sum(axis=1)[:,None]
+    wx = np.sum(w*x_i, axis=-1)
+    wy = np.sum(w*y_i, axis=-1)
+    wxx = np.sum(w*x_i**2, axis=-1)
+    wxy = np.sum(w*x_i*y_i, axis=-1)
+    w = np.sum(w, axis=-1)
+    return (w*wxy-wx*wy)/(wxx*w-wx**2), (-wx*wxy+wxx*wy)/(wxx*w-wx**2)
 

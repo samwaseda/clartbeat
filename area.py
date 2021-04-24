@@ -89,9 +89,11 @@ class Area:
             x = x[self.get_scaled_distance()<1]
         return x
 
-    def get_hull_vertices(self, reduced=True):
-        c = self.get_points(reduced=reduced)
-        return c[ConvexHull(c).vertices]
+    @property
+    def hull(self):
+        if self._hull is None:
+            self.hull = Surface(ConvexHull(self.points))
+        return self._hull
 
     def get_delaunay_vertices(self, max_distance=5, cluster=True):
         forbidden_triangles = self._get_forbidden_triangles(
@@ -126,3 +128,22 @@ class Area:
             return len(self.points)
         else:
             raise ValueError('mode not recognized')
+
+class Surface:
+    def __init__(self, x):
+        self._x = x.copy()
+        self._delaunay = None
+
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def surface(self):
+        return np.linalg.norm(self.x-np.roll(x, 1, axis=0), axis=-1).sum()
+
+    @property
+    def volume(self):
+        y = self.x-np.roll(x, 1, axis=0)
+        return np.absolute(np.sum(np.cross(y[:,0], y[:,1])))/2
+
