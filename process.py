@@ -21,31 +21,32 @@ class ProcessImage:
         self.cluster = {}
         self._indices = {}
         self._reduction = None
+        self._canny_edge = None
         self.file_name = file_name
-        self._norm = None
-        self._img = cleanse_edge(
-            img=self.load_image(target_size=parameters['target_size']),
-            erase_edge=parameters['erase_edge']
-        )
-        self.resolution = (parameters['resolution']*self._reduction)**2
-        white_color_threshold = parameters['white_color']['value']
-        if white_color_threshold is None:
-            white_color_threshold = get_white_color_threshold(
-                self._img, **parameters['white_color']
-            )
-        self.white_color_threshold = white_color_threshold
-        self._img = _clean_noise(
-            self._img,
-            white_color_threshold,
-            eps=parameters['clean_noise']['eps']
-        )
-        edge = get_edge(
-            self.get_image(mean=True), self.get_base_color()/255, **parameters['canny_edge']
-        )
-        self.run_total_area(np.stack(np.where(edge), axis=-1), **parameters['total_area'])
+        self._img = None
+        self._norm = {}
+        self.parameters = parameters
+        self.run_total_area(**parameters['total_area'])
         self.stich_high_angles(**parameters['stich_high_angles'])
         self.run_elastic_net(**parameters['elastic_net'])
         self.determine_total_area()
+
+    @property
+    def img(self):
+        if self._img is None:
+            self._img = cleanse_edge(
+                img=self.load_image(target_size=self.parameters['target_size']),
+                erase_edge=self.parameters['erase_edge']
+            )
+            self.white_color_threshold = get_white_color_threshold(
+                self._img, **self.parameters['white_color']
+            )
+            self._img = _clean_noise(
+                self._img,
+                self.white_color_threshold,
+                eps=self.parameters['clean_noise']['eps']
+            )
+        return self._img
 
     def load_image(self, file_name=None, reduction=None, target_size=None):
         if file_name is None and not hasattr(self, 'file_name'):
@@ -58,6 +59,7 @@ class ProcessImage:
             reduction = np.max([1, reduction])
             if self._reduction is None:
                 self._reduction = reduction
+                self.resolution = (self.parameters['resolution']*self._reduction)**2
         if reduction is None:
             reduction = self._reduction
         return img[::reduction,::reduction]
@@ -66,9 +68,16 @@ class ProcessImage:
     def non_white_points(self):
         return np.mean(self.load_image(), axis=-1) < self.white_color_threshold
 
+    @property
+    def canny_edge(self):
+        if self._canny_edge is None:
+            self._canny_edge = get_edge(
+            self.get_image(mean=True), self.get_base_color()/255, **self.parameters['canny_edge']
+        )
+        return np.stack(np.where(self._canny_edge), axis=-1)
+
     def run_total_area(
         self,
-        points,
         number_of_points=360,
         sigma=0.05,
         height_unit=40,
@@ -76,17 +85,17 @@ class ProcessImage:
         min_fraction=0.05
     ):
         x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
-        dbscan = DBSCAN(eps=eps_areas).fit(points)
+        dbscan = DBSCAN(eps=eps_areas).fit(self.canny_edge)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]
-        hull = ConvexHull(points)
+        hull = ConvexHull(self.canny_edge)
         labels = labels[np.array([
             len(set(np.where(l==dbscan.labels_)[0]).intersection(hull.vertices))>0
             for l in labels
         ])]
         cond = np.any(labels[:,None]==dbscan.labels_, axis=0)
-        mean = np.median(points, axis=0)
-        p = points[cond]-mean
+        mean = np.median(self.canny_edge, axis=0)
+        p = self.canny_edge[cond]-mean
         x_i = np.arctan2(p[:,1], p[:,0])
         y_i = np.linalg.norm(p, axis=-1)
         x_i = np.concatenate((x_i-2*np.pi, x_i, x_i+2*np.pi))
@@ -194,14 +203,14 @@ class ProcessImage:
 
     def get_image(self, mean=False):
         if mean:
-            return np.mean(self._img, axis=-1)
-        return self._img.copy()
+            return np.mean(self.img, axis=-1)
+        return self.img.copy()
 
     def get_base_color(self, mean=True):
-        mean_color = np.mean(self._img, axis=-1)
+        mean_color = np.mean(self.img, axis=-1)
         if mean:
-            return np.mean(self._img[mean_color<self.white_color_threshold])
-        return np.mean(self._img[mean_color<self.white_color_threshold], axis=0)
+            return np.mean(self.img[mean_color<self.white_color_threshold])
+        return np.mean(self.img[mean_color<self.white_color_threshold], axis=0)
 
     @property
     def norm(self):
@@ -211,26 +220,20 @@ class ProcessImage:
     def norm(self, n):
         self._norm = n
 
-    def apply_gaussian(self, sigma=2):
-        norm = np.mean(self._img, axis=-1)
-        if sigma > 0:
-            norm = ndimage.gaussian_filter(norm, sigma=sigma)
-        self.norm = norm
-
-    def apply_mininum(self, size=6):
-        norm = np.mean(self._img, axis=-1)
+    def apply_minimum(self, size=6):
+        norm = np.mean(self.img, axis=-1)
         if size > 0:
             norm = ndimage.minimum_filter(norm, size=size)
         self.norm = norm
         
     def apply_maximum(self, size=1):
-        norm = np.mean(self._img, axis=-1)
+        norm = np.mean(self.img, axis=-1)
         if size > 0:
             norm = ndimage.maximum_filter(norm, size=size)
         self.norm = norm
 
     def apply_median(self, size=1):
-        norm = np.mean(self._img, axis=-1)
+        norm = np.mean(self.img, axis=-1)
         if size > 0:
             norm = ndimage.median_filter(norm, size=size)
         self.norm = norm
@@ -240,7 +243,7 @@ class ProcessImage:
             if smoothened:
                 return self.norm > self._threshold
             else:
-                return np.mean(self._img, axis=-1) > self._threshold
+                return np.mean(self.img, axis=-1) > self._threshold
         elif key=='heart':
             return self.total_area.copy()
         else:
@@ -355,7 +358,7 @@ class ProcessImage:
             xx = x[self._clustering[key].labels_[indices]==l]
             if l==-1:
                 continue
-            if key=='white' and not np.all(xx<np.array(self._img.shape)[:-1]-1):
+            if key=='white' and not np.all(xx<np.array(self.img.shape)[:-1]-1):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
                 continue
             if key=='white' and not np.all(xx>0):
@@ -371,7 +374,7 @@ class ProcessImage:
         elif size is None:
             size = 1
         if apply_filter and key=='white':
-            self.apply_mininum(size=size)
+            self.apply_minimum(size=size)
         elif apply_filter and key=='heart':
             self.apply_maximum(size=size)
         leere = np.stack(np.where(self.get_area(key)), axis=-1)
@@ -402,7 +405,9 @@ def get_minim_white(img, x_min=400, sigma=4):
         x_min -= dhdx/np.absolute(ddhddx)
     return x_min
 
-def get_white_color_threshold(img, bins=100, min_value=175, **args):
+def get_white_color_threshold(img, bins=100, min_value=175, value=None, **args):
+    if value is not None:
+        return value
     norm = img
     if len(norm.shape)==3 and norm.shape[-1]==3:
         norm = np.mean(img, axis=-1)
