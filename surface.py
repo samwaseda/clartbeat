@@ -18,7 +18,7 @@ class Surface:
 
     @property
     def sin(self):
-        v_norm = np.linalg.norm(self.x, axis=-1)
-        return np.arcsin(
-            np.cross(self.x, np.roll(self.x, 1, axis=0))/(v_norm*np.roll(v_norm, 1))
-        )
+        y = np.cross(self.x-np.roll(self.x, -1, axis=0), np.roll(self.x, 1, axis=0)-self.x)
+        y /= np.linalg.norm(self.x-np.roll(self.x, -1, axis=0), axis=-1)
+        y /= np.linalg.norm(np.roll(self.x, 1, axis=0)-self.x, axis=-1)
+        return y

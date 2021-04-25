@@ -30,11 +30,12 @@ class Tissue:
         self.all_labels = None
         self.fibrous_tissue_cluster = None
         self.img = img.copy()
+        self.scar_coeff = np.array(scar_coeff)
         self.positions = self._remove_white(total_area, sigmas, white_areas)
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
-        self._classify_labels(coeff=np.array(scar_coeff), number_of_recursion=number_of_recursion)
+        self._classify_labels(number_of_recursion=number_of_recursion)
 
     @property
     def _has_colors(self):
@@ -72,14 +73,18 @@ class Tissue:
     def _get_zones(self, name):
         return np.where(self._names==name)[0][0]
 
-    def _classify_labels(self, coeff, number_of_recursion=3):
+    def get_distance(self, number_of_recursion=3):
         colors = self.img[self.positions[:,0], self.positions[:,1]]
         base_color = np.mean(colors, axis=0)
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
         for _ in range(number_of_recursion):
-            values = np.sum(colors*coeff[3:6], axis=-1)
-            values += np.sum(base_color*coeff[:3])+coeff[-1]
+            values = np.sum(colors*self.scar_coeff[3:6], axis=-1)
+            values += np.sum(base_color*self.scar_coeff[:3])+self.scar_coeff[-1]
             base_color = np.mean(colors[values>=0], axis=0)
+        return values/np.linalg.norm(self.scar_coeff[:-1])
+
+    def _classify_labels(self, number_of_recursion=3):
+        values = self.get_distance(number_of_recursion=number_of_recursion)
         self.all_labels[values>=0] = self._get_zones('muscle')
         self.all_labels[values<0] = self._get_zones('scar')
 

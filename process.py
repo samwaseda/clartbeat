@@ -310,15 +310,24 @@ class ProcessImage:
         return np.stack((r*np.cos(phi), r*np.sin(phi)), axis=-1)
 
     def _find_neighbors(
-        self, key, max_dist, indices, indices_to_avoid=None, bias=None, max_angle=45/180*np.pi
+        self,
+        key,
+        max_dist,
+        indices,
+        indices_to_avoid=None,
+        bias=None,
+        max_angle=45/180*np.pi,
+        recursion=0
     ):
-        x = self.cluster[key][indices[0]].copy()
+        x = np.concatenate([self.cluster[key][ind] for ind in indices])
         if max_angle is not None and self._get_max_angle(x) > max_angle:
             return indices
         if bias is not None: 
             x = self._get_biased_coordinates(x, bias)
         tree = cKDTree(x)
         for ii,xx in enumerate(self.cluster[key]):
+            if ii in indices:
+                continue
             if bias is not None:
                 xx = self._get_biased_coordinates(xx, bias)
             if tree.query(xx)[0].min()>max_dist:
@@ -326,6 +335,16 @@ class ProcessImage:
             if indices_to_avoid is not None and ii in indices_to_avoid:
                 continue
             indices.append(ii) 
+            if recursion > len(indices):
+                return self._find_neighbors(
+                    key=key,
+                    max_dist=max_dist,
+                    indices=indices,
+                    indices_to_avoid=indices_to_avoid,
+                    bias=bias,
+                    max_angle=max_angle,
+                    recursion=recursion
+                )
         return indices
 
     @property
@@ -348,6 +367,7 @@ class ProcessImage:
         dist_interval=None,
         fraction_interval=None,
         indices_to_avoid=None,
+        recursion=0,
     ):
         if ventricle=='right':
             if 'left' in self._indices.keys() and self._indices['left'] is None:
@@ -379,7 +399,12 @@ class ProcessImage:
             indices = [np.argmax(ratios)]
             if max_dist>0:
                 indices = self._find_neighbors(
-                    'white', max_dist, indices, indices_to_avoid, bias=np.array(bias)
+                    'white',
+                    max_dist,
+                    indices,
+                    indices_to_avoid,
+                    bias=np.array(bias),
+                    recursion=recursion
                 )
         return np.unique(indices)
 
@@ -438,6 +463,8 @@ class ProcessImage:
         return x
 
     def get_data(self, key, index=0):
+        if key=='heart':
+            return Area(self.get_points(key, index), perimeter=self.total_perimeter)
         return Area(self.get_points(key, index))
 
 def get_minim_white(img, x_min=400, sigma=4):

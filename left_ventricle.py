@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy import ndimage
+from surface import Surface
 
 class LeftVentricle:
     def __init__(
@@ -26,6 +27,7 @@ class LeftVentricle:
         self.x_opt_lr = x_opt_lr
         self._convex_weight = None
         self.left_to_right_ratio = left_to_right_ratio
+        self._perimeter = None
 
     def get_edges(self, max_dist=10):
         edges = []
@@ -192,6 +194,16 @@ class LeftVentricle:
         x = np.einsum('i,ji->j', self.x_opt-self.new_center-self.center, self.frame)
         return (1-x[1]/np.sqrt(self.new_radius**2-x[0]**2))/np.sqrt(1-(x[0]/self.contact_area)**2)
 
+    def separate_points(self, x_input):
+        x = np.atleast_2d(x_input)-self.new_center-self.center
+        x = np.einsum('ij,nj->ni', self.frame, x)
+        in_lv = np.array(len(x)*[True])
+        cond_in = np.absolute(x[:,0]/self.contact_area)<1
+        r = np.sqrt(self.new_radius**2-x[cond_in,0]**2)
+        dr = (1-self.epsilon*np.sqrt(np.absolute(1-(x[cond_in,0]/self.contact_area)**2)))
+        in_lv[cond_in] = r*dr<x[cond_in,1]
+        return np.squeeze(in_lv)
+
     def get_left_ventricle(self):
         p_rel = self._rel_perim-self.new_center
         c = np.sum(p_rel*self.frame[1], axis=-1) >= self.center_to_end_vertical
@@ -202,4 +214,10 @@ class LeftVentricle:
         y -= r*dr
         p_rel[c] -= y[:,None]*self.frame[1]
         return p_rel+self.new_center+self.center
+
+    @property
+    def perimeter(self):
+        if self._perimeter is None:
+            self._perimeter = Surface(self.get_left_ventricle())
+        return self._perimeter
 

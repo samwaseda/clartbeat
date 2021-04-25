@@ -75,19 +75,3 @@ class Analyse:
     def get_image(self, mean=False):
         return self.image.get_image(mean=mean)
 
-    def collect_output(self, detail_level=0):
-        global_info = {
-            'resolution': self.image.resolution,
-            'white_color_threshold': self.image.white_color_threshold, 
-            'excluded_objects': np.sum(self.image.non_white_points*(~self.image.total_area)),
-        }
-        # total_area = {
-        #     'area': {
-        #         'convex_hull':
-        #         'delaunay_tesselation':
-        #         'principal_component_analysis':
-        #         'canny_edge_detection':
-        #         'elastic_net':
-        #     }
-        # }
-

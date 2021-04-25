@@ -5,16 +5,23 @@ from sklearn.decomposition import PCA
 from surface import Surface
 
 class Area:
-    def __init__(self, points):
+    def __init__(self, points, perimeter=None):
         if points is None:
             return None
         self.points = points
         self._delaunay_class = None
         self._delaunay = None
         self._hull = None
+        self._perimeter = None
+        if perimeter is not None:
+            self._perimeter = Surface(perimeter)
         if len(points)==0:
             return
         self._initialize_pca()
+
+    @property
+    def perimeter(self):
+        return self._perimeter
 
     @property
     def delaunay(self):
@@ -138,6 +145,8 @@ class Area:
             return self.delaunay.volume
         elif mode=='points':
             return len(self.points)
+        elif mode=='pca':
+            return np.prod(self.get_length())*np.pi
         else:
             raise ValueError('mode not recognized')
 
