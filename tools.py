@@ -5,9 +5,13 @@ class MyPCA(PCA):
     def get_relative_points(self, points):
         return np.einsum(
             'ij,nj->ni',
-            self.pca.components_,
-            points-self.pca.mean_
-        )
+            self.components_,
+            np.asarray(points).reshape(-1, 2)-self.mean_
+        ).reshape(np.shape(points))
+
+    def get_scaled_distance(self, points):
+        r = self.get_relative_points(points=points)*0.5/np.sqrt(self.explained_variance_)
+        return np.linalg.norm(r, axis=-1)
 
 def _get_slope(x, x_interval):
     x0 = np.mean(x_interval)

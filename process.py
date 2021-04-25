@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 import skimage.feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import damp, get_slope
+from tools import damp, get_slope, MyPCA
 
 class ProcessImage:
     def __init__(
@@ -24,6 +24,7 @@ class ProcessImage:
         self._canny_edge_all = None
         self._canny_edge_perimeter = None
         self._elastic_net_perimeter = None
+        self._white_color_threshold = None
         self._total_area = None
         self.file_name = file_name
         self._img = None
@@ -36,14 +37,13 @@ class ProcessImage:
                 img=self.load_image(target_size=self.parameters['target_size']),
                 erase_edge=self.parameters['erase_edge']
             )
-            self.white_color_threshold = get_white_color_threshold(
+            self._white_color_threshold = get_white_color_threshold(
                 self._img, **self.parameters['white_color']
             )
             self._img = clear_dirt(
                 self._img,
                 self.white_color_threshold,
-                size=self.parameters['clear_dirt_size'],
-                brightness_range=self.parameters['brightness_range'],
+                **self.parameters['clear_dirt'],
             )
             self._img = _clean_noise(
                 self._img,
@@ -51,6 +51,12 @@ class ProcessImage:
                 eps=self.parameters['clean_noise']['eps']
             )
         return self._img
+
+    @property
+    def white_color_threshold(self):
+        if self._white_color_threshold is None:
+            _ = self.img
+        return self._white_color_threshold 
 
     def load_image(self, file_name=None, reduction=None, target_size=None):
         if file_name is None and not hasattr(self, 'file_name'):
@@ -468,9 +474,17 @@ def cleanse_edge(img, erase_edge=10):
     img_new[:,-erase_edge:,:] = np.array(3*[255])
     return img_new
 
-def clear_dirt(img, white_threshold, size=10, brightness_range=10):
-    img_mean = np.mean(img_mean, axis=-1)
-    pca = PCA().fit(np.stack(np.where(img_mean<white_threshold), axis=-1))
+def clear_dirt(img, white_threshold, filter_size=10, brightness_range=10, radius_threshold=0.1):
+    img_mean = np.mean(img, axis=-1)
+    pca = MyPCA().fit(np.stack(np.where(img_mean<white_threshold), axis=-1))
+    x = np.arange(img_mean.shape[0])
+    y = np.arange(img_mean.shape[1])
+    f = np.stack(np.meshgrid(y, x), axis=-1)
+    distance_cond = get_slope(pca.get_scaled_distance(f), [1, 1+radius_threshold])
+    filtered = ndimage.median_filter(img_mean, size=filter_size)-white_threshold
+    color_cond = get_slope(filtered, np.array([-1, 1])*brightness_range)
+    img[color_cond>0.5] = np.array(3*[255])
+    return img
 
 def _clean_noise(img, threshold, eps=5):
     x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)

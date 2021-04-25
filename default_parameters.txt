@@ -20,6 +20,11 @@
             "bins": 100,
             "min_value": 175
         },
+        "clear_dirt": {
+            "filter_size": 10,
+            "brightness_range": 10,
+            "radius_threshold": 0.1
+	},
         "canny_edge": {
             "sigma": 18.684489401039166,
             "low": 6.157785258898054,
