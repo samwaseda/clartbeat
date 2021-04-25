@@ -9,10 +9,12 @@ class Area:
         if points is None:
             return None
         self.points = points
-        self._initialize_pca()
         self._delaunay_class = None
         self._delaunay = None
         self._hull = None
+        if len(points)==0:
+            return
+        self._initialize_pca()
 
     @property
     def delaunay(self):
@@ -42,6 +44,11 @@ class Area:
         else:
             x = np.einsum('ij,nj->ni', self.pca.components_, self.points)
             return x.max(axis=0)-x.min(axis=0)
+
+    def get_canvas(self, shape):
+        img = np.zeros(shape)
+        img[self.points[:,0], self.points[:,1]] = 1
+        return img
 
     def get_relative_points(self, points=None):
         if points is None:

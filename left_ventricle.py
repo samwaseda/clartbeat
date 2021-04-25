@@ -18,7 +18,7 @@ class LeftVentricle:
         self._frame = None
         self._curvature = None
         self._lr_positions = None
-        self._sigma_l_to_r = None
+        self._sigma_l_to_r = sigma_l_to_r
         self.sine_sigma = 6
         self.sine_weight = 10
         self._left_to_right = None
@@ -105,7 +105,10 @@ class LeftVentricle:
         p_pos = p > 0
         p_neg = p < 0
         weight = self.weight
-        return np.sort([np.argmax(p_pos*weight), np.argmax(p_neg*weight)])
+        args = np.sort([np.argmax(p_pos*weight), np.argmax(p_neg*weight)])
+        if args[0] == args[1]:
+            raise ValueError('Left ventricle edges not detected')
+        return args
 
     @property
     def lv_end(self):
@@ -152,6 +155,8 @@ class LeftVentricle:
     def frame(self):
         if self._frame is None:
             ex = self.lv_end[1]-self.lv_end[0]
+            if np.linalg.norm(ex) < 1:
+                raise ValueError('Frame not recognized')
             ex /= np.linalg.norm(ex)
             ey = np.einsum('ij,j->i', [[0, 1], [-1, 0]], ex)
             ey *= np.sign(np.sum(np.mean(self.lv_end, axis=0)*ey))

@@ -381,7 +381,7 @@ class ProcessImage:
                 indices = self._find_neighbors(
                     'white', max_dist, indices, indices_to_avoid, bias=np.array(bias)
                 )
-        return indices
+        return np.unique(indices)
 
     @property
     def _threshold(self):
@@ -479,18 +479,23 @@ def clear_dirt(img, white_threshold, filter_size=10, brightness_range=10, radius
     pca = MyPCA().fit(np.stack(np.where(img_mean<white_threshold), axis=-1))
     x = np.arange(img_mean.shape[0])
     y = np.arange(img_mean.shape[1])
-    f = np.stack(np.meshgrid(y, x), axis=-1)
-    distance_cond = get_slope(pca.get_scaled_distance(f), [1, 1+radius_threshold])
+    f = np.stack(np.meshgrid(x, y), axis=-1)
+    distance_cond = get_slope(
+        pca.get_scaled_distance(f), np.array([1, 1+radius_threshold])
+    ).T
     filtered = ndimage.median_filter(img_mean, size=filter_size)-white_threshold
     color_cond = get_slope(filtered, np.array([-1, 1])*brightness_range)
-    img[color_cond>0.5] = np.array(3*[255])
+    img[distance_cond*color_cond>0.5] = np.array(3*[255])
     return img
 
-def _clean_noise(img, threshold, eps=5):
+def _clean_noise(img, threshold, eps=5, min_fraction=0.03):
     x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)
     cluster = DBSCAN(eps=eps).fit(x)
     labels, counts = np.unique(cluster.labels_, return_counts=True)
-    y = x[cluster.labels_!=labels[counts.argmax()]]
+    counts = counts[labels!=-1]
+    labels = labels[labels!=-1]
+    labels = labels[counts/counts.sum()>min_fraction]
+    y = x[np.all(cluster.labels_[:,None]!=labels[None,:], axis=-1)]
     img[y[:,0], y[:,1]] = np.array(3*[255])
     return img
 

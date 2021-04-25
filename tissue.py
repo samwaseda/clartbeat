@@ -111,6 +111,7 @@ class Tissue:
         total_perimeter,
         sigma_image=5,
         sigma_reliability=3,
+        sigma_neighborhood=4,
         max_dist=100,
         total_reliability_ratio=[-0.1, 0.1],
         tissue_limit_area=[60, 20],
@@ -144,13 +145,15 @@ class Tissue:
         local_reliability = get_slope(all_diff, tissue_ratio)*get_slope(all_total, total_density_range)
         local_reliability *= total_reliability.max(axis=-1)[:,None]
         prob = np.zeros(len(self.get_area('scar')))
-        tree_peri = cKDTree(total_perimeter)
-        tree_scar = cKDTree(self.get_area('scar'))
-        mat = tree_peri.sparse_distance_matrix(tree_scar, max_distance=max_dist-1)
-        coo = mat.tocoo()
-        data = coo.data
-        data[data>0] += 0.5
-        data = data.astype(int)
-        np.maximum.at(prob, np.array(coo.col), local_reliability[coo.row][np.arange(len(data)), data])
+        tree_peri = cKDTree(all_positions.reshape(-1, 2))
+        scar_area = self.get_area('scar')
+        tree_scar = cKDTree(scar_area)
+        coo = tree_scar.sparse_distance_matrix(tree_peri, max_distance=3*sigma_neighborhood).tocoo()
+        gauss = np.exp(-0.5*coo.data**2/sigma_neighborhood**2)
+        p_denom = np.zeros(len(scar_area))
+        p_num = np.zeros(len(scar_area))
+        np.add.at(p_denom, coo.row, local_reliability.T.flatten()[coo.col]*gauss[coo.col])
+        np.add.at(p_num, coo.row, gauss[coo.col])
+        prob = p_denom/(p_num+1*(p_num<1.0e-8))
         return prob
 

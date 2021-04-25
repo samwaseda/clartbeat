@@ -22,7 +22,7 @@
         },
         "clear_dirt": {
             "filter_size": 10,
-            "brightness_range": 10,
+            "brightness_range": 20,
             "radius_threshold": 0.1
 	},
         "canny_edge": {
