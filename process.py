@@ -39,6 +39,12 @@ class ProcessImage:
             self.white_color_threshold = get_white_color_threshold(
                 self._img, **self.parameters['white_color']
             )
+            self._img = clear_dirt(
+                self._img,
+                self.white_color_threshold,
+                size=self.parameters['clear_dirt_size'],
+                brightness_range=self.parameters['brightness_range'],
+            )
             self._img = _clean_noise(
                 self._img,
                 self.white_color_threshold,
@@ -461,6 +467,10 @@ def cleanse_edge(img, erase_edge=10):
     img_new[-erase_edge:,:,:] = np.array(3*[255])
     img_new[:,-erase_edge:,:] = np.array(3*[255])
     return img_new
+
+def clear_dirt(img, white_threshold, size=10, brightness_range=10):
+    img_mean = np.mean(img_mean, axis=-1)
+    pca = PCA().fit(np.stack(np.where(img_mean<white_threshold), axis=-1))
 
 def _clean_noise(img, threshold, eps=5):
     x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)
