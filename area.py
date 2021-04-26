@@ -14,7 +14,7 @@ class Area:
         self._hull = None
         self._perimeter = None
         if perimeter is not None:
-            self._perimeter = Surface(perimeter)
+            self._perimeter = perimeter
         if len(points)==0:
             return
         self._initialize_pca()

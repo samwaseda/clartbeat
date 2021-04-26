@@ -59,7 +59,7 @@ class LeftVentricle:
 
     @property
     def tot_perim(self):
-        return self.ref_job.image.total_perimeter
+        return self.ref_job.heart.perimeter.x
 
     @property
     def _rel_perim(self):

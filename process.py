@@ -10,6 +10,7 @@ import skimage.feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
 from tools import damp, get_slope, MyPCA
+from surface import Surface
 
 class ProcessImage:
     def __init__(
@@ -127,7 +128,7 @@ class ProcessImage:
     def canny_edge_perimeter(self):
         if self._canny_edge_perimeter is None:
             self._canny_edge_perimeter = self.get_total_area(**self.parameters['total_area'])
-            self._elastic_net_perimeter = self._canny_edge_perimeter.copy()
+            self._elastic_net_perimeter = Surface(self._canny_edge_perimeter.copy())
         return self._canny_edge_perimeter
 
     @property
@@ -138,14 +139,14 @@ class ProcessImage:
 
     def determine_total_area(self):
         canvas = np.ones_like(self.get_image(mean=True))
-        mean = np.mean(self.total_perimeter, axis=0)
+        mean = np.mean(self.total_perimeter.x, axis=0)
         x = canvas*np.arange(canvas.shape[0])[:,None]
         y = canvas*np.arange(canvas.shape[1])
         x -= mean[0]
         y -= mean[1]
         canvas_r = np.sqrt(x**2+y**2)
         canvas_angle = np.arctan2(y, x)
-        x = self.total_perimeter-mean
+        x = self.total_perimeter.x-mean
         r = np.linalg.norm(x, axis=-1)
         angle = np.arctan2(x[:,1], x[:,0])
         argmin = np.argmin(np.absolute(canvas_angle[:,:,None]-angle[None,None,:]), axis=-1)
@@ -178,25 +179,25 @@ class ProcessImage:
             return
         if np.diff(indices)[0]>0.5*total_number:
             indices = np.roll(indices, 1)
-        self._elastic_net_perimeter = np.roll(self._elastic_net_perimeter, -indices[0], axis=0)
+        self._elastic_net_perimeter.x = np.roll(self._elastic_net_perimeter.x, -indices[0], axis=0)
         indices = (np.diff(indices)+total_number)[0]%total_number
         i_range = np.arange(indices)/indices
-        dr = i_range[:,None]*(self._elastic_net_perimeter[indices]-self._elastic_net_perimeter[0])
-        self._elastic_net_perimeter[:indices] = dr+self._elastic_net_perimeter[0]
-        center = np.mean(self._elastic_net_perimeter, axis=0)
-        r_a = np.linalg.norm(self._elastic_net_perimeter[0]-center)
-        r_b = np.linalg.norm(self._elastic_net_perimeter[indices]-center)
+        dr = i_range[:,None]*(self._elastic_net_perimeter.x[indices]-self._elastic_net_perimeter.x[0])
+        self._elastic_net_perimeter.x[:indices] = dr+self._elastic_net_perimeter.x[0]
+        center = np.mean(self._elastic_net_perimeter.x, axis=0)
+        r_a = np.linalg.norm(self._elastic_net_perimeter.x[0]-center)
+        r_b = np.linalg.norm(self._elastic_net_perimeter.x[indices]-center)
         inner_prod = np.dot(
-            self._elastic_net_perimeter[0]-center, self._elastic_net_perimeter[indices]-center
+            self._elastic_net_perimeter.x[0]-center, self._elastic_net_perimeter.x[indices]-center
         )
         magnifier = i_range*r_a+(1-i_range)*r_b
         magnifier /= np.sqrt(
             i_range**2*r_a**2+(1-i_range)**2*r_b**2+2*i_range*(1-i_range)*inner_prod
         )
-        self._elastic_net_perimeter[:indices] = magnifier[:,None]*(
-            self._elastic_net_perimeter[:indices]-center
+        self._elastic_net_perimeter.x[:indices] = magnifier[:,None]*(
+            self._elastic_net_perimeter.x[:indices]-center
         )
-        self._elastic_net_perimeter[:indices] += center
+        self._elastic_net_perimeter.x[:indices] += center
 
     @property
     def total_perimeter(self):
@@ -228,21 +229,21 @@ class ProcessImage:
         f_gauss_x = gauss-np.roll(gauss, -1, axis=0)
         f_gauss_y = gauss-np.roll(gauss, -1, axis=1)
         for i in range(1000):
-            f_spring = 2*self._elastic_net_perimeter
-            f_spring -= np.roll(self._elastic_net_perimeter, 1, axis=0)
-            f_spring -= np.roll(self._elastic_net_perimeter, -1, axis=0)
+            f_spring = 2*self._elastic_net_perimeter.x
+            f_spring -= np.roll(self._elastic_net_perimeter.x, 1, axis=0)
+            f_spring -= np.roll(self._elastic_net_perimeter.x, -1, axis=0)
             f_spring *= line_tension
-            p = np.rint(self._elastic_net_perimeter).astype(int)
+            p = np.rint(self._elastic_net_perimeter.x).astype(int)
             f_sobel = np.stack((f_sobel_x[p[:,0], p[:,1]], f_sobel_y[p[:,0], p[:,1]]), axis=-1)
             f_gauss = np.stack((f_gauss_x[p[:,0], p[:,1]], f_gauss_y[p[:,0], p[:,1]]), axis=-1)
             f_total = f_spring+f_sobel+f_gauss
-            self._elastic_net_perimeter -= f_total*dt
-            self._elastic_net_perimeter[self._elastic_net_perimeter<0] = 0
-            self._elastic_net_perimeter[
-                self._elastic_net_perimeter[:,0]>=gauss.shape[0], 0
+            self._elastic_net_perimeter.x -= f_total*dt
+            self._elastic_net_perimeter.x[self._elastic_net_perimeter.x<0] = 0
+            self._elastic_net_perimeter.x[
+                self._elastic_net_perimeter.x[:,0]>=gauss.shape[0], 0
             ] = gauss.shape[0]-1
-            self._elastic_net_perimeter[
-                self._elastic_net_perimeter[:,1]>=gauss.shape[1], 1
+            self._elastic_net_perimeter.x[
+                self._elastic_net_perimeter.x[:,1]>=gauss.shape[1], 1
             ] = gauss.shape[1]-1
             if np.linalg.norm(f_total, axis=-1).max()<max_gradient:
                 break
