@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import Delaunay, ConvexHull
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.decomposition import MyPCA
+from tools import MyPCA
 from surface import Surface
 
 class Area:

@@ -65,8 +65,8 @@
 	"fraction_interval": [0.001, 0.006]
     },
     "right": {
-        "max_search": 5,
-        "max_dist": 10,
+        "max_search": 10,
+        "max_dist": 5,
 	"bias": [1.5, 0.2],
 	"recursion": 5
     },

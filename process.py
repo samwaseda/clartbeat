@@ -306,8 +306,8 @@ class ProcessImage:
         recursion=0
     ):
         x = np.concatenate([self.cluster[key][ind] for ind in indices])
-        if max_angle is not None and self._get_max_angle(x) > max_angle:
-            return indices
+        #if max_angle is not None and self._get_max_angle(x) > max_angle:
+        #    return indices
         if bias is not None: 
             x = self._get_biased_coordinates(x, bias)
         tree = cKDTree(x)
@@ -316,9 +316,11 @@ class ProcessImage:
                 continue
             if bias is not None:
                 xx = self._get_biased_coordinates(xx, bias)
-            if tree.query(xx)[0].min()>max_dist:
-                continue
+            # if tree.query(xx)[0].min()>max_dist:
             if indices_to_avoid is not None and ii in indices_to_avoid:
+                continue
+            min_size = max_dist*(2*np.sqrt(np.pi*len(xx))-np.pi*max_dist)
+            if tree.count_neighbors(cKDTree(xx), max_dist) < min_size:
                 continue
             indices.append(ii) 
             if recursion > len(indices):
@@ -414,6 +416,8 @@ class ProcessImage:
         for l in labels[np.argsort(counts)[::-1]]:
             xx = x[self._clustering[key].labels_[indices]==l]
             if l==-1:
+                continue
+            if len(xx) < size**2:
                 continue
             if key=='white' and not np.all(xx<np.array(self.img.shape)[:-1]-1):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
