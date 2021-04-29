@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import Delaunay, ConvexHull
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.decomposition import PCA
+from sklearn.decomposition import MyPCA
 from surface import Surface
 
 class Area:
@@ -36,15 +36,8 @@ class Area:
         return self._delaunay_class
 
     def _initialize_pca(self):
-        self.pca = PCA().fit(self.points)
+        self.pca = MyPCA().fit(self.points)
         
-    def get_principal_vectors(self, normalized=False):
-        if normalized:
-            return self.pca.components_
-        return np.einsum(
-            'i,ij->ij', np.sqrt(self.pca.explained_variance_)*2, self.pca.components_
-        )
-
     def get_length(self, reduced=True):
         if reduced:
             return np.sqrt(self.pca.explained_variance_)*2
@@ -57,19 +50,6 @@ class Area:
         img[self.points[:,0], self.points[:,1]] = 1
         return img
 
-    def get_relative_points(self, points=None):
-        if points is None:
-            points = self.points
-        return np.einsum(
-            'ij,nj->ni',
-            self.pca.components_,
-            points-self.pca.mean_
-        )
-
-    def get_scaled_distance(self, points=None):
-        r = self.get_relative_points(points=points)*0.5/np.sqrt(self.pca.explained_variance_)
-        return np.linalg.norm(r, axis=-1)
-        
     def get_center(self, mean_f=np.mean, ref_point=None, max_diff=0.01):
         mean_point = mean_f(self.points, axis=0)
         if ref_point is None:
@@ -79,7 +59,7 @@ class Area:
         delta_r = self.points-ref_point
         angle = np.einsum('ni,i,n->n', delta_r, ref_v, 1/np.linalg.norm(delta_r, axis=-1))
         return mean_f(self.points[angle>1-max_diff], axis=0)
-    
+
     def _get_internal_triangles(self, forbidden_triangles):
         candidate = np.any(self.delaunay_class.neighbors==-1, axis=-1)
         to_delete = candidate*forbidden_triangles
@@ -104,12 +84,6 @@ class Area:
             return self.delaunay_class.simplices[self._get_internal_triangles(cond)]
         else:
             return self.delaunay_class.simplices[~cond]
-
-    def get_points(self, reduced=True):
-        x = self.points.copy()
-        if reduced:
-            x = x[self.get_scaled_distance()<1]
-        return x
 
     @property
     def hull(self):

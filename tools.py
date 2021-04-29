@@ -4,14 +4,29 @@ from sklearn.decomposition import PCA
 class MyPCA(PCA):
     def get_relative_points(self, points):
         return np.einsum(
-            'ij,nj->ni',
+            'ij,i,nj->ni',
             self.components_,
+            0.5/np.sqrt(self.explained_variance_),
             np.asarray(points).reshape(-1, 2)-self.mean_
         ).reshape(np.shape(points))
 
     def get_scaled_distance(self, points):
-        r = self.get_relative_points(points=points)*0.5/np.sqrt(self.explained_variance_)
-        return np.linalg.norm(r, axis=-1)
+        return np.linalg.norm(self.get_relative_points(points=points), axis=-1)
+
+    def get_abosolute_coordinate(self, points):
+        return np.einsum(
+            'ji,i,nj->ni',
+            self.components_,
+            2*np.sqrt(self.explained_variance_),
+            np.asarray(points).reshape(-1, 2)
+        ).reshape(np.shape(points))+self.mean_
+
+    def get_principal_vectors(self, normalized=False):
+        if normalized:
+            return self.components_
+        return np.einsum(
+            'i,ij->ij', np.sqrt(self.explained_variance_)*2, self.components_
+        )
 
 def _get_slope(x, x_interval):
     x0 = np.mean(x_interval)

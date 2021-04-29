@@ -224,27 +224,12 @@ class ProcessImage:
         gauss = repel_strength*ndimage.gaussian_filter(
             self.get_image(mean=True), sigma=sigma_gauss
         )
-        f_sobel_x = sobel-np.roll(sobel, -1, axis=0)
-        f_sobel_y = sobel-np.roll(sobel, -1, axis=1)
-        f_gauss_x = gauss-np.roll(gauss, -1, axis=0)
-        f_gauss_y = gauss-np.roll(gauss, -1, axis=1)
+        self._elastic_net_perimeter.set_energy_field(sobel)
+        self._elastic_net_perimeter.set_energy_field(gauss)
         for i in range(1000):
-            f_spring = 2*self._elastic_net_perimeter.x
-            f_spring -= np.roll(self._elastic_net_perimeter.x, 1, axis=0)
-            f_spring -= np.roll(self._elastic_net_perimeter.x, -1, axis=0)
-            f_spring *= line_tension
-            p = np.rint(self._elastic_net_perimeter.x).astype(int)
-            f_sobel = np.stack((f_sobel_x[p[:,0], p[:,1]], f_sobel_y[p[:,0], p[:,1]]), axis=-1)
-            f_gauss = np.stack((f_gauss_x[p[:,0], p[:,1]], f_gauss_y[p[:,0], p[:,1]]), axis=-1)
-            f_total = f_spring+f_sobel+f_gauss
+            f_spring = line_tension*self._elastic_net_perimeter.dhook
+            f_total = self._elastic_net_perimeter.force_field+f_spring
             self._elastic_net_perimeter.x -= f_total*dt
-            self._elastic_net_perimeter.x[self._elastic_net_perimeter.x<0] = 0
-            self._elastic_net_perimeter.x[
-                self._elastic_net_perimeter.x[:,0]>=gauss.shape[0], 0
-            ] = gauss.shape[0]-1
-            self._elastic_net_perimeter.x[
-                self._elastic_net_perimeter.x[:,1]>=gauss.shape[1], 1
-            ] = gauss.shape[1]-1
             if np.linalg.norm(f_total, axis=-1).max()<max_gradient:
                 break
 
