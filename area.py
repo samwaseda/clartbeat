@@ -112,6 +112,35 @@ class Area:
         unique, counts = np.unique(cluster.labels_, return_counts=True)
         return edge_indices[cluster.labels_==unique[counts.argmax()]]
 
+    def get_relative_angle(self, ref_center):
+        y = self.get_center()-ref_center
+        return np.arctan2(y[1], y[0])
+
+    def get_polar_coordinates(self, ref_center):
+        x = self.points-ref_center
+        angle = self.get_relative_angle(ref_center=ref_center)
+        r = np.linalg.norm(x, axis=-1)
+        if r.min()==0:
+            raise ValueError('Error calculating polar coordinates')
+        phi = np.mod(np.arctan2(x[:,1], x[:,0])-angle+np.pi, 2*np.pi)-np.pi
+        return r, phi
+
+    def trace_pca(self, ref_center, polynomial_order=3, number_of_points=360):
+        r, phi = self.get_polar_coordinates(ref_center=ref_center)
+        coeff = np.polyfit(phi, r, polynomial_order)
+        all_angle = np.linspace(0, 2*np.pi, number_of_points)
+        pca = MyPCA().fit(np.stack((phi, r-np.polyval(coeff, phi)), axis=-1))
+        phi_range = phi.min()+(phi.max()-phi.min())*(np.cos(all_angle)+1)/2
+        r_fit = np.stack((phi_range, np.polyval(coeff, phi_range)), axis=-1)
+        r_fit[:,1] += pca.get_abosolute_points(
+            np.stack((np.sin(all_angle), np.cos(all_angle)), axis=-1)
+        )[:,1]
+        r_fit[:,0] += self.get_relative_angle(ref_center=ref_center)
+        xy_fit = np.stack(
+            (r_fit[:,1]*np.cos(r_fit[:,0]), r_fit[:,1]*np.sin(r_fit[:,0])), axis=-1
+        )
+        return xy_fit+ref_center
+
     def get_volume(self, mode='hull', reduced=True, max_distance=10, keep_intern=True):
         if mode=='hull':
             return self.hull.volume
