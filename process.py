@@ -406,9 +406,7 @@ class ProcessImage:
         self.apply_median(size=size)
         x = np.stack(np.where(self.get_area(key, True)), axis=-1)
         dist, indices = tree.query(x, p=np.inf)
-        indices = indices[dist<size]
-        x = x[dist<size]
-        dist = dist[dist<size]
+        indices, x, dist = (xxx[dist<size] for xxx in (indices, x, dist))
         labels, counts = np.unique(self._clustering[key].labels_[indices], return_counts=True)
         self.cluster[key] = []
         if key=='white':
@@ -438,7 +436,7 @@ class ProcessImage:
             self.apply_minimum(size=size)
         elif apply_filter and key=='heart':
             self.apply_maximum(size=size)
-        leere = np.stack(np.where(self.get_area(key)), axis=-1)
+        leere = np.stack(np.where(self.get_area(key, True)), axis=-1)
         self._clustering[key] = DBSCAN(eps=eps).fit(leere) # min_samples = 2 ?
         self._sort(key, size=size)
 

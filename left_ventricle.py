@@ -17,7 +17,6 @@ class LeftVentricle:
         self.ref_job = ref_job
         self._er = None
         self._frame = None
-        self._curvature = None
         self._lr_positions = None
         self._sigma_l_to_r = sigma_l_to_r
         self.sine_sigma = 6
@@ -90,16 +89,6 @@ class LeftVentricle:
         x_t = self._center_to_edge-2*self._edge_to_right
         x_m = np.dot([1-self.x_opt_lr, self.x_opt_lr], self.left_to_right)
         return (x_m*(1-self.k_ratio)+self.k_ratio*x_t)*self.er+self.center
-
-    @property
-    def curvature(self):
-        if self._curvature is None:
-            x = self._rel_perim
-            y = np.cross(x-np.roll(x, -1, axis=0), np.roll(x, 1, axis=0)-x)
-            y /= np.linalg.norm(x-np.roll(x, -1, axis=0), axis=-1)
-            y /= np.linalg.norm(np.roll(x, 1, axis=0)-x, axis=-1)
-            self._curvature = y
-        return self._curvature
 
     @property
     def lv_end_args(self):

@@ -75,3 +75,18 @@ class Analyse:
     def get_image(self, mean=False):
         return self.image.get_image(mean=mean)
 
+    def collect_output(self):
+        r = self.image.resolution
+        output = {
+            'file_name': self.image.file_name,
+            'resolution': r,
+            'H_area_elastic_net': self.heart.perimeter.volume*r,
+        }
+        for tag, cl in zip(['H_', 'LL_', 'RL_'], [self.heart, self.left, self.right]):
+            output[tag+'area_point_counts'] = cl.get_volume(mode='points')*r
+            output[tag+'area_principal_component_analysis'] = cl.get_volume(mode='pca')*r
+            output[tag+'area_delaunay_tesselation'] = cl.get_volume(mode='delaunay')*r
+            output[tag+'area_convex_hull'] = cl.get_volume(mode='hull')*r
+        return output
+
+

@@ -6,9 +6,9 @@ from surface import Surface
 
 class Area:
     def __init__(self, points, perimeter=None):
+        self.points = points
         if points is None:
             return None
-        self.points = points
         self._delaunay_class = None
         self._delaunay = None
         self._hull = None
@@ -139,7 +139,7 @@ class Area:
         pca = MyPCA().fit(np.stack((phi, r-np.polyval(coeff, phi)), axis=-1))
         phi_range = phi.min()+(phi.max()-phi.min())*(np.cos(all_angle)+1)/2
         r_fit = np.stack((phi_range, np.polyval(coeff, phi_range)), axis=-1)
-        r_fit[:,1] += pca.get_abosolute_points(
+        r_fit[:,1] += pca.get_absolute_points(
             np.stack((np.sin(all_angle), np.cos(all_angle)), axis=-1)
         )[:,1]
         r_fit[:,0] += self.get_relative_angle(ref_center=ref_center)
@@ -148,11 +148,20 @@ class Area:
         )
         return xy_fit+ref_center
 
+    def _get_delaunay_volume(self, max_distance=10, keep_intern=True):
+        t = self.points[
+            self.get_delaunay_triangles(max_distance=max_distance, keep_intern=keep_intern)
+        ]
+        t = t[:,1:]-t[:,:1]
+        return np.cross(t[:,0], t[:,1]).sum()/2
+
     def get_volume(self, mode='hull', reduced=True, max_distance=10, keep_intern=True):
-        if mode=='hull':
+        if self.points is None:
+            return 0
+        elif mode=='hull':
             return self.hull.volume
         elif mode=='delaunay':
-            return self.delaunay.volume
+            return self._get_delaunay_volume(max_distance=max_distance, keep_intern=keep_intern)
         elif mode=='points':
             return len(self.points)
         elif mode=='pca':

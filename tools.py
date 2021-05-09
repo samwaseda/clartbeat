@@ -13,7 +13,7 @@ class MyPCA(PCA):
     def get_scaled_distance(self, points):
         return np.linalg.norm(self.get_relative_points(points=points), axis=-1)
 
-    def get_abosolute_points(self, points):
+    def get_absolute_points(self, points):
         return np.einsum(
             'ji,j,nj->ni',
             self.components_,
