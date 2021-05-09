@@ -125,8 +125,15 @@ class Area:
         phi = np.mod(np.arctan2(x[:,1], x[:,0])-angle+np.pi, 2*np.pi)-np.pi
         return r, phi
 
-    def trace_pca(self, ref_center, polynomial_order=3, number_of_points=360):
+    def trace_pca(
+        self, ref_center, polynomial_order=None, angle_threshold=0.6, number_of_points=360
+    ):
         r, phi = self.get_polar_coordinates(ref_center=ref_center)
+        if polynomial_order is None:
+            if phi.ptp() > angle_threshold:
+                polynomial_order = 3
+            else:
+                polynomial_order = 1
         coeff = np.polyfit(phi, r, polynomial_order)
         all_angle = np.linspace(0, 2*np.pi, number_of_points)
         pca = MyPCA().fit(np.stack((phi, r-np.polyval(coeff, phi)), axis=-1))

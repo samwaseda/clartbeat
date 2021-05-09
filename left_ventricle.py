@@ -38,12 +38,12 @@ class LeftVentricle:
             y = np.einsum('ij,nj->ni', np.stack((self.er, ep)), x)
             cond = np.absolute(y[:,1])<max_dist
             if np.sum(cond)==0:
-                return np.zeros(2)
+                cond = np.array(len(cond)*[True])
             if i==0:
                 edges.append(y[cond, 0].min())
             else:
                 edges.append(y[cond, 0].max())
-        return edges
+        return np.array(edges)
 
     @property
     def er(self):
@@ -146,10 +146,11 @@ class LeftVentricle:
     @property
     def convex_weight(self):
         if self._convex_weight is None:
+            sin = -self.ref_job.heart.perimeter.sin
             self._convex_weight = np.log(
                 1+np.exp(self.sine_weight*ndimage.gaussian_filter1d(
-                    self.curvature, sigma=self.sine_sigma
-                ))
+                    np.tile(sin, 3), sigma=self.sine_sigma
+                )[len(sin):2*len(sin)])
             )**2
         return self._convex_weight
 
@@ -161,13 +162,15 @@ class LeftVentricle:
                 raise ValueError('Frame not recognized')
             ex /= np.linalg.norm(ex)
             ey = np.einsum('ij,j->i', [[0, 1], [-1, 0]], ex)
-            ey *= np.sign(np.sum(np.mean(self.lv_end, axis=0)*ey))
+            ey *= np.sign(np.sum(np.mean(self.er, axis=0)*ey))
             self._frame = np.stack((ex, ey))
         return self._frame
 
     @property
     def angle(self):
-        angle = np.arcsin(self.curvature[self.lv_end_args[0]: self.lv_end_args[0]]).sum()
+        angle = np.arcsin(
+            self.ref_job.heart.perimeter.sin[self.lv_end_args[0]: self.lv_end_args[0]]
+        ).sum()
         angle -= np.pi*np.rint(angle/(2*np.pi))
         return angle
 
@@ -207,12 +210,11 @@ class LeftVentricle:
     def get_left_ventricle(self):
         p_rel = self._rel_perim-self.new_center
         c = np.sum(p_rel*self.frame[1], axis=-1) >= self.center_to_end_vertical
-        y = np.sum(self.frame[1]*p_rel[c], axis=-1)
-        x = np.sum(self.frame[0]*p_rel[c], axis=-1)
-        r = np.sqrt(self.new_radius**2-x**2)
-        dr = (1-self.epsilon*np.sqrt(np.absolute(1-(x/self.contact_area)**2)))
-        y -= r*dr
-        p_rel[c] -= y[:,None]*self.frame[1]
+        x = np.einsum('ij,nj->in', self.frame, p_rel[c])
+        x[0, np.absolute(x[0])>self.new_radius] = self.new_radius
+        r = np.sqrt(self.new_radius**2-x[0]**2)
+        dr = (1-self.epsilon*np.sqrt(np.absolute(1-(x[0]/self.contact_area)**2)))
+        p_rel[c] -= (x[1]-r*dr)[:,None]*self.frame[1]
         return p_rel+self.new_center+self.center
 
     @property
