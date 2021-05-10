@@ -81,7 +81,6 @@ class Analyse:
             'file_name': self.image.file_name.split('/')[-1],
             'resolution': r,
             'white_color_threshold': self.image.white_color_threshold,
-            'std_curvature': np.std(self.heart.perimeter.get_curvature(sigma=25)),
             'H_area_elastic_net': self.heart.perimeter.volume*r,
         }
         for tag, cl in zip(['H_', 'LL_', 'RL_'], [self.heart, self.left, self.right]):
@@ -95,9 +94,11 @@ class Analyse:
         output['area_total_white_clusters'] = np.sum(
             [len(c) for c in self.image.cluster['white']]
         )*r
-        output['crossing_curvature'] = self.heart.perimeter.get_crossing_curvature(
+        output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
             self.heart.get_center(), self.right.get_center()
-        )
+        )-2*np.pi
+        output['curvature_ptp'] = self.heart.perimeter.get_curvature(sigma=5).ptp()
+        output['curvature_std'] = np.std(self.heart.perimeter.get_curvature(sigma=5))
         output['distance_left_to_right_lumen'] = np.linalg.norm(
             self.left_ventricle.left_to_right
         )*r
