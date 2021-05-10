@@ -37,7 +37,7 @@ class Area:
 
     def _initialize_pca(self):
         self.pca = MyPCA().fit(self.points)
-        
+
     def get_length(self, reduced=True):
         if reduced:
             return np.sqrt(self.pca.explained_variance_)*2
@@ -146,7 +146,7 @@ class Area:
         xy_fit = np.stack(
             (r_fit[:,1]*np.cos(r_fit[:,0]), r_fit[:,1]*np.sin(r_fit[:,0])), axis=-1
         )
-        return xy_fit+ref_center
+        return Surface(xy_fit+ref_center)
 
     def _get_delaunay_volume(self, max_distance=10, keep_intern=True):
         t = self.points[

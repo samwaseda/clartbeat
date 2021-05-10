@@ -1,9 +1,21 @@
 import numpy as np
 from scipy.spatial import cKDTree
+from scipy import ndimage
+
+
+def value_or_zero(func):
+    def original_function(self):
+        if self.x is None:
+            return 0
+        else:
+            return func(self)
+    return original_function
 
 class Surface:
     def __init__(self, x):
-        self.x = x.copy()
+        self.x = None
+        if x is not None:
+            self.x = x.copy()
         self._tree = None
         self._energy_field = None
         self._force_field = None
@@ -39,16 +51,28 @@ class Surface:
         return self._tree
 
     @property
+    @value_or_zero
     def surface(self):
         return np.linalg.norm(self.x-np.roll(x, 1, axis=0), axis=-1).sum()
 
     @property
+    @value_or_zero
     def volume(self):
+        if self.x is None:
+            return 0
         return np.absolute(np.sum(np.cross(self.x, np.roll(self.x, 1, axis=0))))/2
 
     @property
     def sin(self):
         return np.cross(self.rp, self.rm)
+
+    def get_curvature(self, sigma=1):
+        if sigma==1:
+            return self.sin
+        else:
+            return ndimage.gaussian_filter1d(
+                np.tile(self.sin, 3), sigma=int(sigma/360*len(self.sin))
+            )[len(self.sin):2*len(self.sin)]*len(self.sin)
 
     @property
     def dsin(self):
@@ -110,4 +134,30 @@ class Surface:
     @property
     def dhook(self):
         return -self.Rp+self.Rm
+
+    def get_relative_coordinates(self, x_center, x_to=None):
+        x = self.x-x_center
+        if x_to is None:
+            return x
+        er = x_to-x_center
+        er /= np.linalg.norm(er)
+        return np.einsum('ij,nj->ni', [er, [er[1], -er[0]]], x)
+
+    def get_crossing_index(self, x_start, x_end, max_dist=None):
+        if self.x is None:
+            return None
+        x = self.get_relative_coordinates(x_start, x_end)
+        c = x[:,0]>0
+        if sum(c)==0:
+            return None
+        if max_dist is not None and np.sum(np.absolute(x[:,1])<max_dist)>0:
+            return np.argmax(c*(np.absolute(x[:,1])<max_dist)/x[:,0])
+        return np.argmax(c/np.absolute(x[:,1]))
+
+    def get_crossing_curvature(self, x_start, x_end, sigma=25):
+        index = self.get_crossing_index(x_start=x_start, x_end=x_end)
+        if index is None:
+            return 0
+        return self.get_curvature(sigma=sigma)[index]
+
 

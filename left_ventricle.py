@@ -9,7 +9,7 @@ class LeftVentricle:
         ref_job,
         sigma_l_to_r=None,
         sine_sigma=6,
-        sine_weight=100,
+        sine_weight=0.1,
         k_ratio=0.5,
         x_opt_lr=0.8,
         left_to_right_ratio=[0.75, 0.25]
@@ -19,8 +19,8 @@ class LeftVentricle:
         self._frame = None
         self._lr_positions = None
         self._sigma_l_to_r = sigma_l_to_r
-        self.sine_sigma = 6
-        self.sine_weight = 10
+        self.sine_sigma = sine_sigma
+        self.sine_weight = sine_weight
         self._left_to_right = None
         self.k_ratio = k_ratio
         self.x_opt_lr = x_opt_lr
@@ -137,9 +137,9 @@ class LeftVentricle:
         if self._convex_weight is None:
             sin = -self.ref_job.heart.perimeter.sin
             self._convex_weight = np.log(
-                1+np.exp(self.sine_weight*ndimage.gaussian_filter1d(
-                    np.tile(sin, 3), sigma=self.sine_sigma
-                )[len(sin):2*len(sin)])
+                1+np.exp(-self.sine_weight*self.ref_job.heart.perimeter.get_curvature(
+                    sigma=self.sine_sigma
+                ))
             )**2
         return self._convex_weight
 
@@ -151,7 +151,7 @@ class LeftVentricle:
                 raise ValueError('Frame not recognized')
             ex /= np.linalg.norm(ex)
             ey = np.einsum('ij,j->i', [[0, 1], [-1, 0]], ex)
-            ey *= np.sign(np.sum(np.mean(self.er, axis=0)*ey))
+            ey *= np.sign(np.sum(self.er*ey))
             self._frame = np.stack((ex, ey))
         return self._frame
 
@@ -200,7 +200,8 @@ class LeftVentricle:
         p_rel = self._rel_perim-self.new_center
         c = np.sum(p_rel*self.frame[1], axis=-1) >= self.center_to_end_vertical
         x = np.einsum('ij,nj->in', self.frame, p_rel[c])
-        x[0, np.absolute(x[0])>self.new_radius] = self.new_radius
+        c[c][np.absolute(x[0])>self.new_radius] = False
+        x = np.einsum('ij,nj->in', self.frame, p_rel[c])
         r = np.sqrt(self.new_radius**2-x[0]**2)
         dr = (1-self.epsilon*np.sqrt(np.absolute(1-(x[0]/self.contact_area)**2)))
         p_rel[c] -= (x[1]-r*dr)[:,None]*self.frame[1]
