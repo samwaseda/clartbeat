@@ -7,7 +7,7 @@ from surface import Surface
 class Area:
     def __init__(self, points, perimeter=None):
         self.points = points
-        if points is None:
+        if points is None or len(points)==0:
             return None
         self._delaunay_class = None
         self._delaunay = None
@@ -156,7 +156,7 @@ class Area:
         return np.cross(t[:,0], t[:,1]).sum()/2
 
     def get_volume(self, mode='hull', reduced=True, max_distance=10, keep_intern=True):
-        if self.points is None:
+        if self.points is None or len(self.points)==0:
             return 0
         elif mode=='hull':
             return self.hull.volume
