@@ -3,6 +3,15 @@ from scipy.spatial import Delaunay, ConvexHull
 from sklearn.cluster import AgglomerativeClustering
 from tools import MyPCA
 from surface import Surface
+from scipy.spatial import cKDTree
+
+def value_or_zero(func):
+    def original_function(self, *args, **kwargs):
+        if self.points is None or len(self.points)==0:
+            return 0
+        else:
+            return func(self, *args, **kwargs)
+    return original_function
 
 class Area:
     def __init__(self, points, perimeter=None):
@@ -128,6 +137,8 @@ class Area:
     def trace_pca(
         self, ref_center, polynomial_order=None, angle_threshold=0.6, number_of_points=360
     ):
+        if self.points is None or len(self.points)==0:
+            return Surface(None)
         r, phi = self.get_polar_coordinates(ref_center=ref_center)
         if polynomial_order is None:
             if phi.ptp() > angle_threshold:
@@ -155,10 +166,9 @@ class Area:
         t = t[:,1:]-t[:,:1]
         return np.cross(t[:,0], t[:,1]).sum()/2
 
+    @value_or_zero
     def get_volume(self, mode='hull', reduced=True, max_distance=10, keep_intern=True):
-        if self.points is None or len(self.points)==0:
-            return 0
-        elif mode=='hull':
+        if mode=='hull':
             return self.hull.volume
         elif mode=='delaunay':
             return self._get_delaunay_volume(max_distance=max_distance, keep_intern=keep_intern)
@@ -168,4 +178,8 @@ class Area:
             return np.prod(self.get_length())*np.pi
         else:
             raise ValueError('mode not recognized')
+
+    @value_or_zero
+    def count_neighbors(self, points, r=2):
+        return cKDTree(self.points).count_neighbors(cKDTree(points), r=r)
 

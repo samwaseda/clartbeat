@@ -76,24 +76,31 @@ class Analyse:
         return self.image.get_image(mean=mean)
 
     def collect_output(self):
-        r = self.image.resolution
+        rr = self.image.resolution
+        r = np.sqrt(rr)
         output = {
             'file_name': self.image.file_name.split('/')[-1],
-            'resolution': r,
+            'resolution': rr,
             'white_color_threshold': self.image.white_color_threshold,
-            'H_area_elastic_net': self.heart.perimeter.volume*r,
+            'H_area_elastic_net': self.heart.perimeter.volume*rr,
         }
         for tag, cl in zip(['H_', 'LL_', 'RL_'], [self.heart, self.left, self.right]):
-            output[tag+'area_point_counts'] = cl.get_volume(mode='points')*r
-            output[tag+'area_principal_component_analysis'] = cl.get_volume(mode='pca')*r
-            output[tag+'area_delaunay_tesselation'] = cl.get_volume(mode='delaunay')*r
-            output[tag+'area_convex_hull'] = cl.get_volume(mode='hull')*r
+            output[tag+'area_point_counts'] = cl.get_volume(mode='points')*rr
+            output[tag+'area_principal_component_analysis'] = cl.get_volume(mode='pca')*rr
+            output[tag+'area_delaunay_tesselation'] = cl.get_volume(mode='delaunay')*rr
+            output[tag+'area_convex_hull'] = cl.get_volume(mode='hull')*rr
         output['RL_area_adapted_principal_component_analysis'] = self.right.trace_pca(
             self.heart.get_center()
-        ).volume*r
+        ).volume*rr
+        output['LL_contact_with_perimeter'] = self.left.count_neighbors(
+            self.heart.perimeter.x, r=2
+        )*rr
+        output['RL_contact_with_perimeter'] = self.right.count_neighbors(
+            self.heart.perimeter.x, r=2
+        )*rr
         output['area_total_white_clusters'] = np.sum(
             [len(c) for c in self.image.cluster['white']]
-        )*r
+        )*rr
         output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
             self.heart.get_center(), self.right.get_center()
         )-2*np.pi
