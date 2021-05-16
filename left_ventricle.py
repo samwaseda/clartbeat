@@ -186,15 +186,18 @@ class LeftVentricle:
         x = np.einsum('i,ji->j', self.x_opt-self.new_center-self.center, self.frame)
         return (1-x[1]/np.sqrt(self.new_radius**2-x[0]**2))/np.sqrt(1-(x[0]/self.contact_area)**2)
 
-    def separate_points(self, x_input):
-        x = np.atleast_2d(x_input)-self.new_center-self.center
+    def get_global_to_local(self, x_in):
+        x = np.atleast_2d(x_in)-self.new_center-self.center
         x = np.einsum('ij,nj->ni', self.frame, x)
-        in_lv = np.array(len(x)*[True])
+        return np.array(x).reshape(np.asarray(x_in).shape)
+
+    def separate_points(self, x_input):
+        x = self.get_global_to_local(np.atleast_2d(x_input))
         cond_in = np.absolute(x[:,0]/self.contact_area)<1
         r = np.sqrt(self.new_radius**2-x[cond_in,0]**2)
         dr = (1-self.epsilon*np.sqrt(np.absolute(1-(x[cond_in,0]/self.contact_area)**2)))
-        in_lv[cond_in] = r*dr<x[cond_in,1]
-        return np.squeeze(in_lv)
+        cond_in[cond_in] = r*dr<x[cond_in,1]
+        return np.squeeze(cond_in)
 
     def get_left_ventricle(self):
         p_rel = self._rel_perim-self.new_center

@@ -89,15 +89,21 @@ class Analyse:
             output[tag+'area_principal_component_analysis'] = cl.get_volume(mode='pca')*rr
             output[tag+'area_delaunay_tesselation'] = cl.get_volume(mode='delaunay')*rr
             output[tag+'area_convex_hull'] = cl.get_volume(mode='hull')*rr
+            output[tag+'surface_delaunay_tesselation'] = len(cl.delaunay.x)*rr
         output['RL_area_adapted_principal_component_analysis'] = self.right.trace_pca(
             self.heart.get_center()
         ).volume*rr
+        output['LL_RL_contact'] = self.left.count_neighbors(self.right.points, r=2)*rr
         output['LL_contact_with_perimeter'] = self.left.count_neighbors(
             self.heart.perimeter.x, r=2
-        )*rr
+        )*r
         output['RL_contact_with_perimeter'] = self.right.count_neighbors(
             self.heart.perimeter.x, r=2
+        )*r
+        output['RV_area_wo_cracks'] = np.sum(
+            self.left_ventricle.separate_points(self.tissue.positions)
         )*rr
+        output['RV_area'] = np.sum(self.left_ventricle.separate_points(self.heart.points))*rr
         output['area_total_white_clusters'] = np.sum(
             [len(c) for c in self.image.cluster['white']]
         )*rr
@@ -109,6 +115,8 @@ class Analyse:
         output['distance_left_to_right_lumen'] = np.linalg.norm(
             self.left_ventricle.left_to_right
         )*r
+        output['scar_total'] = np.sum(self.tissue.get_distance()<0)*rr
+        output['scar_err'] = self.tissue.get_error()*rr
         return output
 
 

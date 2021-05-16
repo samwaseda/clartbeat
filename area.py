@@ -181,5 +181,5 @@ class Area:
 
     @value_or_zero
     def count_neighbors(self, points, r=2):
-        return cKDTree(self.points).count_neighbors(cKDTree(points), r=r)
+        return cKDTree(self.points).count_neighbors(cKDTree(points), r=r)/r
 

@@ -52,7 +52,7 @@ class Tissue:
         img[self.positions[:,0], self.positions[:,1]] = self.img[self.positions[:,0], self.positions[:,1]]
         return img
 
-    def get_median_filter(self, size=5):
+    def get_median_filter(self, size=6):
         if size > 0:
             if self._has_colors:
                 return np.array([ndimage.median_filter(img, size=size) for img in self.img.T]).T
@@ -82,6 +82,11 @@ class Tissue:
             values += np.sum(base_color*self.scar_coeff[:3])+self.scar_coeff[-1]
             base_color = np.mean(colors[values>=0], axis=0)
         return values/np.linalg.norm(self.scar_coeff[:-1])
+
+    def get_error(self, number_of_recursion=3, error_distance=10):
+        dist = self.get_distance(number_of_recursion=number_of_recursion)
+        dist = get_slope(dist, np.array([1, -1])*error_distance)
+        return np.sum(np.absolute(dist-np.rint(dist)))
 
     def _classify_labels(self, number_of_recursion=3):
         values = self.get_distance(number_of_recursion=number_of_recursion)
