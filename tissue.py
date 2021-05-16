@@ -22,7 +22,7 @@ class Tissue:
         sigmas=[4],
         color_enhancement=10,
         filter_size=6,
-        fill_white=True,
+        fill_white=False,
         number_of_recursion=3,
     ):
         self._data = {}
@@ -54,10 +54,19 @@ class Tissue:
 
     def get_median_filter(self, size=6):
         if size > 0:
+            tree = cKDTree(self.positions)
+            distances, indices = tree.query(
+                self.positions, k=np.rint(np.pi*(1+size)**2).astype(int), distance_upper_bound=size
+            )
+            positions = self.positions[indices[distances<np.inf]]
             if self._has_colors:
-                return np.array([ndimage.median_filter(img, size=size) for img in self.img.T]).T
+                rgb = np.empty(distances.shape+(3,))
             else:
-                return ndimage.median_filter(self.img, size=size)
+                rgb = np.empty(distances.shape)
+            rgb[:] = np.nan
+            rgb[distances<np.inf] = self.img[positions[:,0], positions[:,1]]
+            rgb = np.nanmedian(rgb, axis=1)
+            self.img[self.positions[:,0], self.positions[:,1]] = rgb
         return self.img
 
     def _remove_white(self, total_area, sigmas=None, white_areas=None, ridge_threshold=0.5):

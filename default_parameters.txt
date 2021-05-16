@@ -85,7 +85,7 @@
         ],
         "color_enhancement": 10,
         "filter_size": 6,
-        "fill_white": true,
+        "fill_white": false,
         "number_of_recursion": 5
     }
 }
