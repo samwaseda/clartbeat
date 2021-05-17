@@ -6,7 +6,7 @@ from sklearn.decomposition import PCA
 from area import Area
 import matplotlib.pylab as plt
 from scipy.spatial import ConvexHull
-import skimage.feature
+from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
 from tools import damp, get_slope, MyPCA
@@ -413,9 +413,7 @@ class ProcessImage:
             self.background = []
         for l in labels[np.argsort(counts)[::-1]]:
             xx = x[self._clustering[key].labels_[indices]==l]
-            if l==-1:
-                continue
-            if len(xx) < size**2:
+            if l==-1 or len(xx) < size**2:
                 continue
             if key=='white' and not np.all(xx<np.array(self.img.shape)[:-1]-1):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
@@ -437,7 +435,7 @@ class ProcessImage:
         elif apply_filter and key=='heart':
             self.apply_maximum(size=size)
         leere = np.stack(np.where(self.get_area(key, True)), axis=-1)
-        self._clustering[key] = DBSCAN(eps=eps).fit(leere) # min_samples = 2 ?
+        self._clustering[key] = DBSCAN(eps=eps).fit(leere)
         self._sort(key, size=size)
 
     def get_points(self, key, index=0):
@@ -515,7 +513,7 @@ def _clean_noise(img, threshold, eps=5, min_fraction=0.03):
     return img
 
 def get_edge(img, base, sigma=18.684, low=6.1578, high=7.6701):
-    return skimage.feature.canny(
+    return feature.canny(
         image=img,
         sigma=sigma,
         low_threshold=low*base,

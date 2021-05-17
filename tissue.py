@@ -19,6 +19,15 @@ class Tissue:
             7.63830882e+01,
             5.55613592
         ]),
+        wrinkle_coeff=np.array([
+            105.81948491,
+            -20.37814521,
+            212.99928111,
+            -425.62869598,
+            24.75423721,
+            -163.16110443,
+            -26.80759178
+        ]),
         sigmas=[4],
         color_enhancement=10,
         filter_size=6,
@@ -31,11 +40,13 @@ class Tissue:
         self.fibrous_tissue_cluster = None
         self.img = img.copy()
         self.scar_coeff = np.array(scar_coeff)
+        self.wrinkle_coeff = np.array(wrinkle_coeff)
         self.positions = self._remove_white(total_area, sigmas, white_areas)
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
-        self._classify_labels(number_of_recursion=number_of_recursion)
+        self._classify_labels('wrinkle', number_of_recursion=1)
+        self._classify_labels('scar', number_of_recursion=number_of_recursion)
 
     @property
     def _has_colors(self):
@@ -97,8 +108,11 @@ class Tissue:
         dist = get_slope(dist, np.array([1, -1])*error_distance)
         return np.sum(np.absolute(dist-np.rint(dist)))
 
-    def _classify_labels(self, number_of_recursion=3):
-        values = self.get_distance(number_of_recursion=number_of_recursion)
+    def _classify_labels(self, key, number_of_recursion=3):
+        if key=='wrinkle':
+            values = self.get_distance(number_of_recursion=number_of_recursion)
+        elif key=='scar':
+            values = self.get_distance(number_of_recursion=number_of_recursion)
         self.all_labels[values>=0] = self._get_zones('muscle')
         self.all_labels[values<0] = self._get_zones('scar')
 

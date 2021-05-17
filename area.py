@@ -16,16 +16,14 @@ def value_or_zero(func):
 class Area:
     def __init__(self, points, perimeter=None):
         self.points = points
-        if points is None or len(points)==0:
-            return None
         self._delaunay_class = None
         self._delaunay = None
         self._hull = None
         self._perimeter = None
         if perimeter is not None:
             self._perimeter = perimeter
-        if len(points)==0:
-            return
+        if points is None or len(points)==0:
+            return None
         self._initialize_pca()
 
     @property
@@ -35,6 +33,8 @@ class Area:
     @property
     def delaunay(self):
         if self._delaunay is None:
+            if self.points is None or len(self.points)==0:
+                self._delaunnay = Surface(None)
             self._delaunay = Surface(self.points[self.get_delaunay_vertices()])
         return self._delaunay
 

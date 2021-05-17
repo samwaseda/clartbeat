@@ -123,7 +123,7 @@ class CalibrateColors(Learn):
         import json
         data_to_store = self.data.copy()
         for k,v in data_to_store.items():
-            data_to_store[k] = v.tolist()
+            data_to_store[k] = v
         with open(file_name, 'w') as fp:
             json.dump(data_to_store, fp)
 
