@@ -28,6 +28,13 @@ class CalibrateColors(Learn):
         }
         super().__init__(**arg)
 
+    def load_data(self, data):
+        for k,v in data.items():
+            if k=='job_index' and len(self.data['job_index'])>0:
+                self.data[k].extend([d+np.max(self.data['job_index'])+1 for d in v])
+            else:
+                self.data[k].extend(v)
+
     def append(self, color):
         self.position_lst.append(color.ref_job.tissue.positions)
         self.img_lst.append(color.ref_job.get_image())
@@ -42,10 +49,18 @@ class CalibrateColors(Learn):
         self.data['tag'].extend(len(color._data['unique_labels'])*[-1])
         self.proceed()
 
-    def fit(self, indices, clf):
+    def fit(self, key):
 #         indices = self.get_indices([0, 1, 2])
+        if key=='scar':
+            clf = self.fit_scar
+            indices = self.get_indices([0, 1])
+            base_color = self.get_base_colors(muscle=True)
+        if key=='wrinkle':
+            clf = self.fit_wrinkle
+            indices = self.get_indices([1, 2])
+            base_color = self.get_base_colors(muscle=False)
         c = np.concatenate([
-            self.get_base_colors()[indices],
+            base_color[indices],
             np.array(self.data['colors'])[indices]
         ], axis=-1)
         l = np.array(self.data['tag'])[indices]
@@ -64,11 +79,11 @@ class CalibrateColors(Learn):
         self.data['tag'][self.current_index] = value
         if self.check_scar:
             if 0 in self.data['tag'] and 1 in self.data['tag']:
-                self.fit(self.get_indices([0, 1]), self.fit_scar)
+                self.fit('scar')
             self.check_scar = False
         if self.check_wrinkle:
             if 2 in self.data['tag'] and 1 in self.data['tag']:
-                self.fit(self.get_indices([1, 2]), self.fit_wrinkle)
+                self.fit('wrinkle')
             self.check_wrinkle = False
         self.proceed()
 
@@ -123,7 +138,7 @@ class CalibrateColors(Learn):
         import json
         data_to_store = self.data.copy()
         for k,v in data_to_store.items():
-            data_to_store[k] = v
+            data_to_store[k] = np.array(v).tolist()
         with open(file_name, 'w') as fp:
             json.dump(data_to_store, fp)
 
