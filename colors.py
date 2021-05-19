@@ -54,11 +54,10 @@ class CalibrateColors(Learn):
         if key=='scar':
             clf = self.fit_scar
             indices = self.get_indices([0, 1])
-            base_color = self.get_base_colors(muscle=True)
-        if key=='wrinkle':
+        elif key=='wrinkle':
             clf = self.fit_wrinkle
             indices = self.get_indices([1, 2])
-            base_color = self.get_base_colors(muscle=False)
+        base_color = self.get_base_colors()
         c = np.concatenate([
             base_color[indices],
             np.array(self.data['colors'])[indices]
@@ -87,11 +86,11 @@ class CalibrateColors(Learn):
             self.check_wrinkle = False
         self.proceed()
 
-    def _get_individual_distances(self, clf, muscle, max_dist=255**2):
+    def _get_individual_distances(self, clf, max_dist=255**2):
         if not hasattr(clf, 'coef_'):
             return len(self.data['tag'])*[max_dist]
         values = np.sum(clf.coef_*np.concatenate([
-            self.get_base_colors(muscle=muscle),
+            self.get_base_colors(),
             np.array(self.data['colors'])
         ], axis=-1), axis=-1)/np.linalg.norm(clf.coef_)+clf.intercept_
         return np.absolute(values)
@@ -125,12 +124,10 @@ class CalibrateColors(Learn):
         tags = np.atleast_1d(tags)
         return np.any(np.array(self.data['tag'])[:,None]==tags[None,:], axis=-1)
 
-    def get_base_colors(self, muscle=True):
+    def get_base_colors(self):
         mean_colors = []
         for index in np.unique(self.data['job_index']):
             indices = np.asarray(self.data['job_index'])==index
-            if muscle:
-                indices *= (np.asarray(self.data['tag'])==0) | (np.asarray(self.data['tag'])==-1)
             mean_colors.append(np.mean(np.asarray(self.data['colors'])[indices], axis=0))
         return np.array(mean_colors)[np.array(self.data['job_index'])]
 
