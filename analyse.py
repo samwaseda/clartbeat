@@ -22,7 +22,6 @@ class Analyse:
     @property
     def heart(self):
         if self._heart is None:
-            self.image.run_cluster('heart', **self.parameters['heart'])
             self._heart = self.image.get_data('heart')
         return self._heart
 
@@ -31,7 +30,6 @@ class Analyse:
         if self._left is None:
             if self._heart is None:
                 _ = self.heart
-            self.image.run_cluster('white', **self.parameters['white'])
             self._left = self.image.get_data(
                 'white', self.image.get_index('left', **self.parameters['left'])
             )
@@ -56,7 +54,7 @@ class Analyse:
             self._tissue = Tissue(
                 img=self.get_image(),
                 total_area=self.image.get_area('heart'),
-                white_areas=self.image.cluster['white'],
+                white_areas=self.image.white_area,
                 **self.parameters['tissue']
             )
         return self._tissue

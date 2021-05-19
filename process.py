@@ -18,8 +18,6 @@ class ProcessImage:
         file_name,
         parameters,
     ):
-        self._clustering = {}
-        self.cluster = {}
         self._indices = {}
         self._reduction = None
         self._canny_edge_all = None
@@ -27,6 +25,8 @@ class ProcessImage:
         self._elastic_net_perimeter = None
         self._white_color_threshold = None
         self._total_area = None
+        self._white_area = None
+        self._heart_area = None
         self.file_name = file_name
         self._img = None
         self.parameters = parameters
@@ -179,16 +179,21 @@ class ProcessImage:
             return
         if np.diff(indices)[0]>0.5*total_number:
             indices = np.roll(indices, 1)
-        self._elastic_net_perimeter.x = np.roll(self._elastic_net_perimeter.x, -indices[0], axis=0)
+        self._elastic_net_perimeter.x = np.roll(
+            self._elastic_net_perimeter.x, -indices[0], axis=0
+        )
         indices = (np.diff(indices)+total_number)[0]%total_number
         i_range = np.arange(indices)/indices
-        dr = i_range[:,None]*(self._elastic_net_perimeter.x[indices]-self._elastic_net_perimeter.x[0])
+        dr = i_range[:,None]*(
+            self._elastic_net_perimeter.x[indices]-self._elastic_net_perimeter.x[0]
+        )
         self._elastic_net_perimeter.x[:indices] = dr+self._elastic_net_perimeter.x[0]
         center = np.mean(self._elastic_net_perimeter.x, axis=0)
         r_a = np.linalg.norm(self._elastic_net_perimeter.x[0]-center)
         r_b = np.linalg.norm(self._elastic_net_perimeter.x[indices]-center)
         inner_prod = np.dot(
-            self._elastic_net_perimeter.x[0]-center, self._elastic_net_perimeter.x[indices]-center
+            self._elastic_net_perimeter.x[0]-center,
+            self._elastic_net_perimeter.x[indices]-center
         )
         magnifier = i_range*r_a+(1-i_range)*r_b
         magnifier /= np.sqrt(
@@ -297,7 +302,6 @@ class ProcessImage:
 
     def _find_neighbors(
         self,
-        key,
         max_dist,
         indices,
         indices_to_avoid=None,
@@ -305,13 +309,13 @@ class ProcessImage:
         max_angle=45/180*np.pi,
         recursion=0
     ):
-        x = np.concatenate([self.cluster[key][ind] for ind in indices])
+        x = np.concatenate([self.white_area[ind] for ind in indices])
         #if max_angle is not None and self._get_max_angle(x) > max_angle:
         #    return indices
         if bias is not None: 
             x = self._get_biased_coordinates(x, bias)
         tree = cKDTree(x)
-        for ii,xx in enumerate(self.cluster[key]):
+        for ii,xx in enumerate(self.white_area):
             if ii in indices:
                 continue
             if bias is not None:
@@ -325,7 +329,6 @@ class ProcessImage:
             indices.append(ii) 
             if recursion > len(indices):
                 return self._find_neighbors(
-                    key=key,
                     max_dist=max_dist,
                     indices=indices,
                     indices_to_avoid=indices_to_avoid,
@@ -360,8 +363,8 @@ class ProcessImage:
         if ventricle=='right':
             if 'left' in self._indices.keys() and self._indices['left'] is None:
                 return None
-        cluster = self.cluster['white'][:max_search]
-        heart_center = self.cluster['heart'][0].mean(axis=0)
+        cluster = self.white_area[:max_search]
+        heart_center = self.heart_area[0].mean(axis=0)
         distances = np.array([
             np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
         ])
@@ -372,7 +375,7 @@ class ProcessImage:
         if ventricle=='left':
             x = np.array([xx.mean(axis=0) for xx in cluster])
             indices = [
-                np.argmin(np.linalg.norm(x-self.cluster['heart'][0].mean(axis=0), axis=-1)/size)
+                np.argmin(np.linalg.norm(x-self.heart_area[0].mean(axis=0), axis=-1)/size)
             ]
             if max_dist>0:
                 indices = self._find_neighbors('white', max_dist, indices, max_angle=None)
@@ -400,19 +403,19 @@ class ProcessImage:
     def _threshold(self):
         return self.white_color_threshold
 
-    def _sort(self, key, size):
+    def _sort(self, cluster_labels, key, size):
         w = np.where(self.get_area(key, True))
         tree = cKDTree(data=np.stack(w, axis=-1))
         self.apply_median(size=size)
         x = np.stack(np.where(self.get_area(key, True)), axis=-1)
         dist, indices = tree.query(x, p=np.inf)
         indices, x, dist = (xxx[dist<size] for xxx in (indices, x, dist))
-        labels, counts = np.unique(self._clustering[key].labels_[indices], return_counts=True)
-        self.cluster[key] = []
+        labels, counts = np.unique(cluster_labels[indices], return_counts=True)
+        areas_to_return = []
         if key=='white':
             self.background = []
         for l in labels[np.argsort(counts)[::-1]]:
-            xx = x[self._clustering[key].labels_[indices]==l]
+            xx = x[cluster_labels[indices]==l]
             if l==-1 or len(xx) < size**2:
                 continue
             if key=='white' and not np.all(xx<np.array(self.img.shape)[:-1]-1):
@@ -421,28 +424,40 @@ class ProcessImage:
             if key=='white' and not np.all(xx>0):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
                 continue
-            self.cluster[key].append(xx)
+            areas_to_return.append(xx)
+        return areas_to_return
 
-    def run_cluster(self, key, eps=3, size=None, apply_filter=True):
-        if key not in ['white', 'heart']:
-            raise ValueError('key must be white or heart')
-        if size is None and key=='white':
-            size = 6
-        elif size is None:
-            size = 1
-        if apply_filter and key=='white':
-            self.apply_minimum(size=size)
-        elif apply_filter and key=='heart':
-            self.apply_maximum(size=size)
+    def run_cluster(self, eps=3, size=1, **kwargs):
         leere = np.stack(np.where(self.get_area(key, True)), axis=-1)
-        self._clustering[key] = DBSCAN(eps=eps).fit(leere)
-        self._sort(key, size=size)
+        return DBSCAN(eps=eps).fit(leere)
 
-    def get_points(self, key, index=0):
+    @property
+    def white_area(self):
+        if self._white_area is None:
+            if self.parameters['white']['apply_filter']:
+                self.apply_minimum(size=self.parameters['white']['size'])
+            cluster = self.run_cluster(**self.parameter['white'])
+            self._white_area = self._sort(
+                cluster.labels_, 'white', size=self.parameters['white']['size']
+            )
+        return self._white_area
+
+    @property
+    def heart_area(self):
+        if self._heart_area is None:
+            if self.parameters['heart']['apply_filter']:
+                self.apply_maximum(size=self.parameters['heart']['size'])
+            cluster = self.run_cluster(**self.parameter['heart'])
+            self._heart_area = self._sort(
+                cluster.labels_, 'heart', size=self.parameters['heart']['size']
+            )
+        return self._heart_area
+
+    def get_points(self, points, index=0):
         if index is None:
             return np.array([])
         index = np.array([index]).flatten()
-        x = self.cluster[key][index[0]]
+        x = points[index[0]]
         if len(index)>1:
             for ii in index[1:]:
                 x = np.concatenate((x, self.cluster[key][ii]))
@@ -450,8 +465,9 @@ class ProcessImage:
 
     def get_data(self, key, index=0):
         if key=='heart':
-            return Area(self.get_points(key, index), perimeter=self.total_perimeter)
-        return Area(self.get_points(key, index))
+            return Area(self.get_points(self.heart_area, index), perimeter=self.total_perimeter)
+        else:
+            return Area(self.get_points(self.white_area, index))
 
 def get_minim_white(img, x_min=400, sigma=4):
     for _ in range(10):
