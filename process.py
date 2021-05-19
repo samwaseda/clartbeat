@@ -378,7 +378,7 @@ class ProcessImage:
                 np.argmin(np.linalg.norm(x-self.heart_area[0].mean(axis=0), axis=-1)/size)
             ]
             if max_dist>0:
-                indices = self._find_neighbors('white', max_dist, indices, max_angle=None)
+                indices = self._find_neighbors(max_dist, indices, max_angle=None)
             self._indices['left'] = indices
         elif ventricle=='right':
             if indices_to_avoid is None and 'left' in self._indices.keys():
@@ -390,7 +390,6 @@ class ProcessImage:
             indices = [np.argmax(ratios)]
             if max_dist>0:
                 indices = self._find_neighbors(
-                    'white',
                     max_dist,
                     indices,
                     indices_to_avoid,
@@ -427,7 +426,7 @@ class ProcessImage:
             areas_to_return.append(xx)
         return areas_to_return
 
-    def run_cluster(self, eps=3, size=1, **kwargs):
+    def run_cluster(self, key, eps=3, size=1, **kwargs):
         leere = np.stack(np.where(self.get_area(key, True)), axis=-1)
         return DBSCAN(eps=eps).fit(leere)
 
@@ -436,7 +435,7 @@ class ProcessImage:
         if self._white_area is None:
             if self.parameters['white']['apply_filter']:
                 self.apply_minimum(size=self.parameters['white']['size'])
-            cluster = self.run_cluster(**self.parameter['white'])
+            cluster = self.run_cluster('white', **self.parameters['white'])
             self._white_area = self._sort(
                 cluster.labels_, 'white', size=self.parameters['white']['size']
             )
@@ -447,7 +446,7 @@ class ProcessImage:
         if self._heart_area is None:
             if self.parameters['heart']['apply_filter']:
                 self.apply_maximum(size=self.parameters['heart']['size'])
-            cluster = self.run_cluster(**self.parameter['heart'])
+            cluster = self.run_cluster('heart', **self.parameters['heart'])
             self._heart_area = self._sort(
                 cluster.labels_, 'heart', size=self.parameters['heart']['size']
             )
@@ -460,7 +459,7 @@ class ProcessImage:
         x = points[index[0]]
         if len(index)>1:
             for ii in index[1:]:
-                x = np.concatenate((x, self.cluster[key][ii]))
+                x = np.concatenate((x, points[ii]))
         return x
 
     def get_data(self, key, index=0):

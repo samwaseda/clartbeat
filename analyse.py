@@ -31,7 +31,7 @@ class Analyse:
             if self._heart is None:
                 _ = self.heart
             self._left = self.image.get_data(
-                'white', self.image.get_index('left', **self.parameters['left'])
+                'white', self.image.get_index('left', **self.parameters['processing']['left'])
             )
         return self._left
 
@@ -43,7 +43,7 @@ class Analyse:
             self._right = self.image.get_data(
                 'white', self.image.get_index(
                     'right',
-                    **self.parameters['right'],
+                    **self.parameters['processing']['right'],
                 )
             )
         return self._right
