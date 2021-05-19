@@ -32,7 +32,6 @@ class Tissue:
         color_enhancement=10,
         filter_size=6,
         fill_white=False,
-        number_of_recursion=3,
     ):
         self._data = {}
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])
@@ -45,8 +44,8 @@ class Tissue:
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
-        self._classify_labels('wrinkle', number_of_recursion=1)
-        self._classify_labels('scar', number_of_recursion=number_of_recursion)
+        self._classify_labels('wrinkle')
+        self._classify_labels('scar')
 
     @property
     def _has_colors(self):
@@ -93,26 +92,24 @@ class Tissue:
     def _get_zones(self, name):
         return np.where(self._names==name)[0][0]
 
-    def get_distance(self, number_of_recursion=3):
+    def get_distance(self):
         colors = self.img[self.positions[:,0], self.positions[:,1]]
         base_color = np.mean(colors, axis=0)
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
-        for _ in range(number_of_recursion):
-            values = np.sum(colors*self.scar_coeff[3:6], axis=-1)
-            values += np.sum(base_color*self.scar_coeff[:3])+self.scar_coeff[-1]
-            base_color = np.mean(colors[values>=0], axis=0)
+        values = np.sum(colors*self.scar_coeff[3:6], axis=-1)
+        values += np.sum(base_color*self.scar_coeff[:3])+self.scar_coeff[-1]
         return values/np.linalg.norm(self.scar_coeff[:-1])
 
-    def get_error(self, number_of_recursion=3, error_distance=10):
-        dist = self.get_distance(number_of_recursion=number_of_recursion)
+    def get_error(self, error_distance=10):
+        dist = self.get_distance()
         dist = get_slope(dist, np.array([1, -1])*error_distance)
         return np.sum(np.absolute(dist-np.rint(dist)))
 
-    def _classify_labels(self, key, number_of_recursion=3):
+    def _classify_labels(self, key):
         if key=='wrinkle':
-            values = self.get_distance(number_of_recursion=number_of_recursion)
+            values = self.get_distance()
         elif key=='scar':
-            values = self.get_distance(number_of_recursion=number_of_recursion)
+            values = self.get_distance()
         self.all_labels[values>=0] = self._get_zones('muscle')
         self.all_labels[values<0] = self._get_zones('scar')
 
