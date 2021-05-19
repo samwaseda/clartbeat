@@ -97,8 +97,8 @@ class CalibrateColors(Learn):
 
     def get_distances(self):
         return np.stack((
-            self._get_individual_distances(self.fit_scar, muscle=True),
-            self._get_individual_distances(self.fit_wrinkle, muscle=False)
+            self._get_individual_distances(self.fit_scar),
+            self._get_individual_distances(self.fit_wrinkle)
         ), axis=-1).min(axis=-1)
 
     def get_weights(self):
