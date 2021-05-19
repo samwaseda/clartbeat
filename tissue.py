@@ -11,13 +11,13 @@ class Tissue:
         total_area,
         white_areas=None,
         scar_coeff=np.array([
-            108.53077322,
-            85.86755819,
-            131.5495863,
-            -22.91295889,
-            -171.23556317,
-            -75.73765353,
-            5.24436772
+            172.7841801,
+            59.23275405,
+            157.11478815,
+            34.05867431,
+            -288.71695014,
+            -93.9764001,
+            3.63999657
         ]),
         wrinkle_coeff=np.array([
             105.81948491,
@@ -38,8 +38,8 @@ class Tissue:
         self.all_labels = None
         self.fibrous_tissue_cluster = None
         self.img = img.copy()
-        self.scar_coeff = np.array(scar_coeff)
-        self.wrinkle_coeff = np.array(wrinkle_coeff)
+        self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
+        self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
         self.positions = self._remove_white(total_area, sigmas, white_areas)
         if fill_white:
             self.img = self._fill_white()
@@ -98,7 +98,7 @@ class Tissue:
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
         values = np.sum(colors*self.scar_coeff[3:6], axis=-1)
         values += np.sum(base_color*self.scar_coeff[:3])+self.scar_coeff[-1]
-        return values/np.linalg.norm(self.scar_coeff[:-1])
+        return values
 
     def get_error(self, error_distance=10):
         dist = self.get_distance()

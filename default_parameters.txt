@@ -24,7 +24,7 @@
             "filter_size": 10,
             "brightness_range": 20,
             "radius_threshold": 0.1
-	},
+        },
         "canny_edge": {
             "sigma": 19.0,
             "low": 6.157785258898054,
@@ -61,30 +61,30 @@
     "left": {
         "max_search": 5,
         "max_dist": 5,
-	"dist_interval": [0.6, 0.4],
-	"fraction_interval": [0.001, 0.006]
+        "dist_interval": [0.6, 0.4],
+        "fraction_interval": [0.001, 0.006]
     },
     "right": {
         "max_search": 10,
         "max_dist": 5,
-	"bias": [1.5, 0.2],
-	"recursion": 5
+        "bias": [1.5, 0.2],
+        "recursion": 5
     },
     "tissue": {
         "scar_coeff": [
-            108.53077322,
-            85.86755819,
-            131.5495863,
-            -22.91295889,
-            -171.23556317,
-            -75.73765353,
-            5.24436772
+            172.7841801,
+            59.23275405,
+            157.11478815,
+            34.05867431,
+            -288.71695014,
+            -93.9764001,
+            3.63999657
         ],
         "sigmas": [
             4
         ],
         "color_enhancement": 10,
         "filter_size": 6,
-        "fill_white": false,
+        "fill_white": false
     }
 }
