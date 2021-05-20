@@ -87,15 +87,7 @@ class ProcessImage:
         )
         return np.stack(np.where(self._canny_edge_all), axis=-1)
 
-    def get_total_area(
-        self,
-        number_of_points=360,
-        sigma=0.05,
-        height_unit=40,
-        eps_areas=5,
-        min_fraction=0.05
-    ):
-        x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
+    def _get_main_edges(self, eps_areas=5, min_fraction=0.04):
         dbscan = DBSCAN(eps=eps_areas).fit(self.canny_edge_all)
         labels, counts = np.unique(dbscan.labels_, return_counts=True)
         labels = labels[counts>min_fraction*len(dbscan.labels_)]
@@ -105,12 +97,24 @@ class ProcessImage:
             for l in labels
         ])]
         cond = np.any(labels[:,None]==dbscan.labels_, axis=0)
-        mean = np.median(self.canny_edge_all, axis=0)
-        p = self.canny_edge_all[cond]-mean
+        return self.canny_edge_all[cond].astype(float)
+
+    def get_total_area(
+        self,
+        number_of_points=360,
+        sigma=0.05,
+        height_unit=40,
+        eps_areas=5,
+        min_fraction=0.04
+    ):
+        p = self._get_main_edges(eps_areas=eps_areas, min_fraction=min_fraction)
+        mean = np.mean(p, axis=0)
+        p -= mean
         x_i = np.arctan2(p[:,1], p[:,0])
         y_i = np.linalg.norm(p, axis=-1)
         x_i = np.concatenate((x_i-2*np.pi, x_i, x_i+2*np.pi))
         y_i = np.concatenate((y_i, y_i, y_i))
+        x_range = np.linspace(0, 2*np.pi, number_of_points, endpoint=False)
         dist = x_range[:,None]-x_i[None,:]
         dist -= np.rint(dist/np.pi/2)*2*np.pi
         w = np.exp((y_i[None,:]-y_i.mean())/height_unit-dist**2/(2*sigma**2))
@@ -278,9 +282,9 @@ class ProcessImage:
     def get_area(self, key, smoothened=True):
         if key=='white':
             if smoothened:
-                return self.norm > self._threshold
+                return self.norm > self.white_color_threshold
             else:
-                return np.mean(self.img, axis=-1) > self._threshold
+                return np.mean(self.img, axis=-1) > self.white_color_threshold
         elif key=='heart':
             return self.total_area.copy()
         else:
@@ -398,10 +402,6 @@ class ProcessImage:
                 )
         return np.unique(indices)
 
-    @property
-    def _threshold(self):
-        return self.white_color_threshold
-
     def _sort(self, cluster_labels, key, size):
         w = np.where(self.get_area(key, True))
         tree = cKDTree(data=np.stack(w, axis=-1))
@@ -417,10 +417,7 @@ class ProcessImage:
             xx = x[cluster_labels[indices]==l]
             if l==-1 or len(xx) < size**2:
                 continue
-            if key=='white' and not np.all(xx<np.array(self.img.shape)[:-1]-1):
-                self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
-                continue
-            if key=='white' and not np.all(xx>0):
+            if key=='white' and np.any(xx>=np.array(self.img.shape)[:-1]-1) or np.any(xx<=0):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
                 continue
             areas_to_return.append(xx)
@@ -439,6 +436,8 @@ class ProcessImage:
             self._white_area = self._sort(
                 cluster.labels_, 'white', size=self.parameters['white']['size']
             )
+            if len(self._white_area)==0:
+                raise AssertionError('No white area detected')
         return self._white_area
 
     @property
@@ -450,6 +449,8 @@ class ProcessImage:
             self._heart_area = self._sort(
                 cluster.labels_, 'heart', size=self.parameters['heart']['size']
             )
+            if len(self._heart_area)==0:
+                raise AssertionError('No heart detected')
         return self._heart_area
 
     def get_points(self, points, index=0):
