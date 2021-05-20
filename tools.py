@@ -33,6 +33,9 @@ def _get_slope(x, x_interval):
     dx = np.diff(x_interval)[0]/2
     return 1/(1+np.exp(-(x-x0)*np.log(10)/dx))
 
+def get_softplus(x, slope=1):
+    return np.log10(1+10**(slope*x))
+
 def get_slope(x, x_interval, symmetric=False):
     if symmetric:
         return _get_slope(x, x_interval)*_get_slope(x, x_interval[::-1])

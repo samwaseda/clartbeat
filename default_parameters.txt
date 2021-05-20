@@ -45,7 +45,7 @@
         },
         "stich_high_angles": {
             "sigma": 5,
-            "max_angle": 0.045
+            "max_angle": 16.2
         },
         "heart": {
             "eps": 3,

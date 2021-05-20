@@ -53,7 +53,7 @@ class Analyse:
         if self._tissue is None:
             self._tissue = Tissue(
                 img=self.get_image(),
-                total_area=self.image.get_area('heart'),
+                total_area=self.image.total_area,
                 white_areas=self.image.white_area,
                 **self.parameters['tissue']
             )

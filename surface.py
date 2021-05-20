@@ -71,7 +71,7 @@ class Surface:
 
     @property
     def sin(self):
-        return np.cross(self.rp, self.rm)
+        return np.arcsin(np.cross(self.rp, self.rm))
 
     def get_curvature(self, sigma=1):
         if sigma==1:

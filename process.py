@@ -26,7 +26,6 @@ class ProcessImage:
         self._white_color_threshold = None
         self._total_area = None
         self._white_area = None
-        self._heart_area = None
         self.file_name = file_name
         self._img = None
         self.parameters = parameters
@@ -161,12 +160,10 @@ class ProcessImage:
     def stich_high_angles(
         self,
         sigma=5,
-        max_angle=0.045,
+        max_angle=16.2,
     ):
-        if max_angle > 0.5*np.pi or max_angle < 0:
-            return
         total_number = len(self.canny_edge_perimeter.x)
-        high_angles = self.canny_edge_perimeter.get_curvature(sigma=sigma)>max_angle
+        high_angles = -self.canny_edge_perimeter.get_curvature(sigma=sigma)>max_angle
         high_angles = np.arange(len(high_angles))[high_angles]
         if len(high_angles)<2:
             return
@@ -268,7 +265,7 @@ class ProcessImage:
         if size > 0:
             norm = ndimage.minimum_filter(norm, size=size)
         self.norm = norm
-        
+
     def apply_maximum(self, size=1):
         norm = np.mean(self.img, axis=-1)
         if size > 0:
@@ -281,16 +278,11 @@ class ProcessImage:
             norm = ndimage.median_filter(norm, size=size)
         self.norm = norm
 
-    def get_area(self, key, smoothened=True):
-        if key=='white':
-            if smoothened:
-                return self.norm > self.white_color_threshold
-            else:
-                return np.mean(self.img, axis=-1) > self.white_color_threshold
-        elif key=='heart':
-            return self.total_area.copy()
+    def get_area(self, smoothened=True):
+        if smoothened:
+            return self.norm > self.white_color_threshold
         else:
-            raise ValueError('key not recognized')
+            return np.mean(self.img, axis=-1) > self.white_color_threshold
 
     def _get_max_angle(self, x):
         center = np.stack(np.where(self.total_area), axis=-1).mean(axis=0)
@@ -370,7 +362,7 @@ class ProcessImage:
             if 'left' in self._indices.keys() and self._indices['left'] is None:
                 return None
         cluster = self.white_area[:max_search]
-        heart_center = self.heart_area[0].mean(axis=0)
+        heart_center = self.heart_area.mean(axis=0)
         distances = np.array([
             np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
         ])
@@ -381,7 +373,7 @@ class ProcessImage:
         if ventricle=='left':
             x = np.array([xx.mean(axis=0) for xx in cluster])
             indices = [
-                np.argmin(np.linalg.norm(x-self.heart_area[0].mean(axis=0), axis=-1)/size)
+                np.argmin(np.linalg.norm(x-heart_center.mean(axis=0), axis=-1)/size)
             ]
             if max_dist>0:
                 indices = self._find_neighbors(max_dist, indices, max_angle=None)
@@ -404,39 +396,38 @@ class ProcessImage:
                 )
         return np.unique(indices)
 
-    def _sort(self, cluster_labels, key, size):
-        w = np.where(self.get_area(key, True))
+    def _sort(self, cluster_labels, size):
+        w = np.where(self.get_area(True))
         tree = cKDTree(data=np.stack(w, axis=-1))
         self.apply_median(size=size)
-        x = np.stack(np.where(self.get_area(key, True)), axis=-1)
+        x = np.stack(np.where(self.get_area(True)), axis=-1)
         dist, indices = tree.query(x, p=np.inf)
         indices, x, dist = (xxx[dist<size] for xxx in (indices, x, dist))
         labels, counts = np.unique(cluster_labels[indices], return_counts=True)
         areas_to_return = []
-        if key=='white':
-            self.background = []
+        self.background = []
         for l in labels[np.argsort(counts)[::-1]]:
             xx = x[cluster_labels[indices]==l]
             if l==-1 or len(xx) < size**2:
                 continue
-            if key=='white' and np.any(xx>=np.array(self.img.shape)[:-1]-1) or np.any(xx<=0):
+            if np.any(xx>=np.array(self.img.shape)[:-1]-1) or np.any(xx<=0):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
                 continue
             areas_to_return.append(xx)
         return areas_to_return
 
-    def run_cluster(self, key, eps=3, size=1, **kwargs):
-        leere = np.stack(np.where(self.get_area(key, True)), axis=-1)
-        return DBSCAN(eps=eps).fit(leere)
+    def run_cluster(self, eps=3, size=1, **kwargs):
+        leere = np.stack(np.where(self.get_area(True)), axis=-1)
+        return DBSCAN(eps=eps).fit(leere).labels_
 
     @property
     def white_area(self):
         if self._white_area is None:
             if self.parameters['white']['apply_filter']:
                 self.apply_minimum(size=self.parameters['white']['size'])
-            cluster = self.run_cluster('white', **self.parameters['white'])
+            cluster = self.run_cluster(**self.parameters['white'])
             self._white_area = self._sort(
-                cluster.labels_, 'white', size=self.parameters['white']['size']
+                cluster, size=self.parameters['white']['size']
             )
             if len(self._white_area)==0:
                 raise AssertionError('No white area detected')
@@ -444,16 +435,7 @@ class ProcessImage:
 
     @property
     def heart_area(self):
-        if self._heart_area is None:
-            if self.parameters['heart']['apply_filter']:
-                self.apply_maximum(size=self.parameters['heart']['size'])
-            cluster = self.run_cluster('heart', **self.parameters['heart'])
-            self._heart_area = self._sort(
-                cluster.labels_, 'heart', size=self.parameters['heart']['size']
-            )
-            if len(self._heart_area)==0:
-                raise AssertionError('No heart detected')
-        return self._heart_area
+        return np.stack(np.where(self.total_area), axis=-1)
 
     def get_points(self, points, index=0):
         if index is None:
@@ -467,7 +449,7 @@ class ProcessImage:
 
     def get_data(self, key, index=0):
         if key=='heart':
-            return Area(self.get_points(self.heart_area, index), perimeter=self.total_perimeter)
+            return Area(self.heart_area, perimeter=self.total_perimeter)
         else:
             return Area(self.get_points(self.white_area, index))
 

@@ -20,11 +20,18 @@ class Area:
         self._delaunay = None
         self._hull = None
         self._perimeter = None
+        self._pca = None
+        self._tree = None
         if perimeter is not None:
             self._perimeter = perimeter
         if points is None or len(points)==0:
             return None
-        self._initialize_pca()
+
+    @property
+    def tree(self):
+        if self._tree is None:
+            self._tree = cKDTree(self.points)
+        return self._tree
 
     @property
     def perimeter(self):
@@ -44,8 +51,11 @@ class Area:
             self._delaunay_class = Delaunay(self.points)
         return self._delaunay_class
 
-    def _initialize_pca(self):
-        self.pca = MyPCA().fit(self.points)
+    @property
+    def pca(self):
+        if self._pca is None:
+            self._pca = MyPCA().fit(self.points)
+        return self._pca
 
     def get_length(self, reduced=True):
         if reduced:
@@ -181,5 +191,7 @@ class Area:
 
     @value_or_zero
     def count_neighbors(self, points, r=2):
-        return cKDTree(self.points).count_neighbors(cKDTree(points), r=r)/r
+        if not isinstance(points, cKDTree):
+            points = cKDTree(points)
+        return self.tree.count_neighbors(points, r=r)/r
 
