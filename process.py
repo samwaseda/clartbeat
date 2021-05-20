@@ -131,8 +131,10 @@ class ProcessImage:
     @property
     def canny_edge_perimeter(self):
         if self._canny_edge_perimeter is None:
-            self._canny_edge_perimeter = self.get_total_area(**self.parameters['total_area'])
-            self._elastic_net_perimeter = Surface(self._canny_edge_perimeter.copy())
+            self._canny_edge_perimeter = Surface(
+                self.get_total_area(**self.parameters['total_area'])
+            )
+            self._elastic_net_perimeter = self._canny_edge_perimeter.copy()
         return self._canny_edge_perimeter
 
     @property
@@ -163,12 +165,8 @@ class ProcessImage:
     ):
         if max_angle > 0.5*np.pi or max_angle < 0:
             return
-        v = self.canny_edge_perimeter.copy()
-        v -= np.roll(v, -1, axis=0)
-        v_norm = np.linalg.norm(v, axis=-1)
-        sin = np.arcsin(np.cross(v, np.roll(v, 1, axis=0))/(v_norm*np.roll(v_norm, 1)))
-        total_number = len(self.canny_edge_perimeter)
-        high_angles = ndimage.gaussian_filter1d(sin, sigma=sigma)>max_angle
+        total_number = len(self.canny_edge_perimeter.x)
+        high_angles = self.canny_edge_perimeter.get_curvature(sigma=sigma)>max_angle
         high_angles = np.arange(len(high_angles))[high_angles]
         if len(high_angles)<2:
             return
@@ -214,6 +212,10 @@ class ProcessImage:
             self.stich_high_angles(**self.parameters['stich_high_angles'])
             self.run_elastic_net(**self.parameters['elastic_net'])
         return self._elastic_net_perimeter
+
+    def unstich(self):
+        self._elastic_net_perimeter = self.canny_edge_perimeter.copy()
+        self.run_elastic_net(**self.parameters['elastic_net'])
 
     def run_elastic_net(
         self,

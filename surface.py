@@ -20,6 +20,13 @@ class Surface:
         self._energy_field = None
         self._force_field = None
 
+    def copy(self):
+        new_surface = Surface(self.x)
+        new_surface._tree = self._tree
+        new_surface._energy_field = self._energy_field
+        new_surface._force_field = self._force_field
+        return new_surface
+
     @property
     def xp(self):
         return np.roll(self.x, 1, axis=0)

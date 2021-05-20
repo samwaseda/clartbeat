@@ -103,7 +103,7 @@ class Analyse:
         )*rr
         output['RV_area'] = np.sum(self.left_ventricle.separate_points(self.heart.points))*rr
         output['area_total_white_clusters'] = np.sum(
-            [len(c) for c in self.image.cluster['white']]
+            [len(c) for c in self.image.white_area]
         )*rr
         output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
             self.heart.get_center(), self.right.get_center()
