@@ -7,6 +7,8 @@ from collections import defaultdict
 import random
 import pandas as pd
 import matplotlib.pylab as plt
+import json
+import os
 
 class CalibrateColors(Learn):
     def __init__(self, **arg):
@@ -29,6 +31,11 @@ class CalibrateColors(Learn):
         super().__init__(**arg)
 
     def load_data(self, data):
+        if not os.path.exists(data):
+            raise ValueError(data+' does not exist')
+        if isinstance(data, str):
+            with open(data, 'r') as f:
+                data = json.load(f)
         for k,v in data.items():
             if k=='job_index' and len(self.data['job_index'])>0:
                 self.data[k].extend([d+np.max(self.data['job_index'])+1 for d in v])
@@ -132,7 +139,6 @@ class CalibrateColors(Learn):
         return np.array(mean_colors)[np.array(self.data['job_index'])]
 
     def save_data(self, file_name):
-        import json
         data_to_store = self.data.copy()
         for k,v in data_to_store.items():
             data_to_store[k] = np.array(v).tolist()
