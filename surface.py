@@ -73,11 +73,15 @@ class Surface:
     def sin(self):
         return np.arcsin(np.cross(self.rp, self.rm))
 
-    def get_curvature(self, sigma=1):
+    def get_curvature(self, sigma=1, laplacian=False):
         if sigma==1:
             return self.sin
         else:
-            return ndimage.gaussian_filter1d(
+            if laplacian:
+                f = ndimage.gaussian_laplace
+            else:
+                f = ndimage.gaussian_filter1d
+            return f(
                 np.tile(self.sin, 3), sigma=int(sigma/360*len(self.sin))
             )[len(self.sin):2*len(self.sin)]*len(self.sin)
 
@@ -161,10 +165,16 @@ class Surface:
             return np.argmax(c*(np.absolute(x[:,1])<max_dist)/x[:,0])
         return np.argmax(c/np.absolute(x[:,1]))
 
-    def get_crossing_curvature(self, x_start, x_end, sigma=25):
+    def get_crossing_curvature(self, x_start, x_end, sigma=25, laplacian=False):
         index = self.get_crossing_index(x_start=x_start, x_end=x_end)
         if index is None:
             return 0
-        return self.get_curvature(sigma=sigma)[index]
+        return self.get_curvature(sigma=sigma, laplacian=laplacian)[index]
+
+    @value_or_zero
+    def count_neighbors(self, points, r=2):
+        if not isinstance(points, cKDTree):
+            points = cKDTree(points)
+        return self.tree.count_neighbors(points, r=r)/r**2
 
 

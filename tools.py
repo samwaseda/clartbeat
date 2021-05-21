@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial import cKDTree
 from sklearn.decomposition import PCA
 
 class MyPCA(PCA):
@@ -52,3 +53,9 @@ def get_relative_coordinates(x, v):
     v /= np.linalg.norm(v, axis=-1)[:,None]
     v = np.stack((v, np.einsum('ij,nj->ni', [[0, 1], [-1, 0]], v)), axis=-1)
     return np.squeeze(np.einsum('kij,nkj->nki', v, x))
+
+def find_common_labels(unique_labels, labels):
+    dist, _ = cKDTree(
+        np.unique(unique_labels).reshape(-1, 1)
+    ).query(labels.reshape(-1, 1))
+    return dist == 0

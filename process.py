@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import damp, get_slope, MyPCA
+from tools import damp, get_slope, MyPCA, find_common_labels
 from surface import Surface
 
 class ProcessImage:
@@ -86,17 +86,14 @@ class ProcessImage:
         )
         return np.stack(np.where(self._canny_edge_all), axis=-1)
 
-    def _get_main_edges(self, eps_areas=5, min_fraction=0.04):
-        dbscan = DBSCAN(eps=eps_areas).fit(self.canny_edge_all)
-        labels, counts = np.unique(dbscan.labels_, return_counts=True)
-        labels = labels[counts>min_fraction*len(dbscan.labels_)]
-        hull = ConvexHull(self.canny_edge_all)
-        labels = labels[np.array([
-            len(set(np.where(l==dbscan.labels_)[0]).intersection(hull.vertices))>0
-            for l in labels
-        ])]
-        cond = np.any(labels[:,None]==dbscan.labels_, axis=0)
-        return self.canny_edge_all[cond].astype(float)
+    def _get_main_edges(self, eps_areas=5, min_fraction=0.2):
+        labels = DBSCAN(eps=eps_areas).fit(self.canny_edge_all).labels_
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        large_enough = find_common_labels(
+            unique_labels[counts/counts[unique_labels!=-1].max() > min_fraction], labels
+        )
+        hull = ConvexHull(self.canny_edge_all[large_enough])
+        return self.canny_edge_all[find_common_labels(labels[large_enough][hull.vertices], labels)]
 
     def get_total_area(
         self,
@@ -106,7 +103,7 @@ class ProcessImage:
         eps_areas=5,
         min_fraction=0.04
     ):
-        p = self._get_main_edges(eps_areas=eps_areas, min_fraction=min_fraction)
+        p = self._get_main_edges(eps_areas=eps_areas, min_fraction=min_fraction).astype(float)
         mean = np.mean(p, axis=0)
         p -= mean
         x_i = np.arctan2(p[:,1], p[:,0])
@@ -370,15 +367,15 @@ class ProcessImage:
         if not self._satisfies_criteria(size, distances, dist_interval, fraction_interval):
             self._indices[ventricle] = None
             return None
-        if ventricle=='left':
-            x = np.array([xx.mean(axis=0) for xx in cluster])
+        if ventricle == 'left':
+            x = self._get_radial_mean_value()[:max_search]
             indices = [
-                np.argmin(np.linalg.norm(x-heart_center.mean(axis=0), axis=-1)/size)
+                np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
             ]
-            if max_dist>0:
+            if max_dist > 0:
                 indices = self._find_neighbors(max_dist, indices, max_angle=None)
             self._indices['left'] = indices
-        elif ventricle=='right':
+        elif ventricle == 'right':
             if indices_to_avoid is None and 'left' in self._indices.keys():
                 indices_to_avoid = np.array(self._indices['left'])
             ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
@@ -386,7 +383,7 @@ class ProcessImage:
             ratios *= size
             ratios *= np.log(distances)
             indices = [np.argmax(ratios)]
-            if max_dist>0:
+            if max_dist > 0:
                 indices = self._find_neighbors(
                     max_dist,
                     indices,
@@ -395,6 +392,16 @@ class ProcessImage:
                     recursion=recursion
                 )
         return np.unique(indices)
+
+    def _get_radial_mean_value(self, center=None):
+        if center is None:
+            center = self.heart_area.mean(axis=0)
+        x_mean_lst = []
+        for x in self.white_area:
+            xx = x-center
+            r_mean = np.linalg.norm(xx, axis=-1).mean()
+            x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
+        return np.array(x_mean_lst)
 
     def _sort(self, cluster_labels, size):
         w = np.where(self.get_area(True))
@@ -408,7 +415,7 @@ class ProcessImage:
         self.background = []
         for l in labels[np.argsort(counts)[::-1]]:
             xx = x[cluster_labels[indices]==l]
-            if l==-1 or len(xx) < size**2:
+            if l == -1 or len(xx) < size**2:
                 continue
             if np.any(xx>=np.array(self.img.shape)[:-1]-1) or np.any(xx<=0):
                 self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)

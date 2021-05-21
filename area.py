@@ -193,5 +193,5 @@ class Area:
     def count_neighbors(self, points, r=2):
         if not isinstance(points, cKDTree):
             points = cKDTree(points)
-        return self.tree.count_neighbors(points, r=r)/r
+        return self.tree.count_neighbors(points, r=r)/r**2
 

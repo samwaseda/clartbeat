@@ -35,7 +35,7 @@
             "sigma": 0.05,
             "height_unit": 40,
             "eps_areas": 5,
-            "min_fraction": 0.04
+            "min_fraction": 0.2
         },
         "ridge": {
             "sigmas": [
@@ -47,14 +47,9 @@
             "sigma": 5,
             "max_angle": 16.2
         },
-        "heart": {
-            "eps": 3,
-            "size": 1,
-            "apply_filter": true
-        },
         "white": {
             "eps": 3,
-            "size": 6,
+            "size": 5,
             "apply_filter": true
         },
         "left": {

@@ -172,6 +172,12 @@ class CalibrateColors(Learn):
         )
         ax[1].imshow(self.current_img)
 
+    def get_coeff(self, key):
+        if key=='wrinkle':
+            return np.append(self.fit_wrinkle.coef_, self.fit_wrinkle.intercept_)
+        else:
+            return np.append(self.fit_scar.coef_, self.fit_scar.intercept_)
+
 class Colors:
     def __init__(
         self,
