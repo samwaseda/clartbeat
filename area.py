@@ -7,7 +7,7 @@ from scipy.spatial import cKDTree
 
 def value_or_zero(func):
     def original_function(self, *args, **kwargs):
-        if self.points is None or len(self.points)==0:
+        if len(self.points)==0:
             return 0
         else:
             return func(self, *args, **kwargs)
@@ -15,6 +15,8 @@ def value_or_zero(func):
 
 class Area:
     def __init__(self, points, perimeter=None):
+        if points is None:
+            points = []
         self.points = points
         self._delaunay_class = None
         self._delaunay = None
@@ -24,8 +26,9 @@ class Area:
         self._tree = None
         if perimeter is not None:
             self._perimeter = perimeter
-        if points is None or len(points)==0:
-            return None
+
+    def exists(self):
+        return len(self.points) > 0:
 
     @property
     def tree(self):

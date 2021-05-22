@@ -15,10 +15,12 @@ from surface import Surface
 class ProcessImage:
     def __init__(
         self,
+        ref_job,
         file_name,
         parameters,
     ):
-        self._indices = {}
+        self.ref_job = ref_job
+        self._contact_peri = None
         self._reduction = None
         self._canny_edge_all = None
         self._canny_edge_perimeter = None
@@ -26,6 +28,7 @@ class ProcessImage:
         self._white_color_threshold = None
         self._total_area = None
         self._white_area = None
+        self._stiched = False
         self.file_name = file_name
         self._img = None
         self.parameters = parameters
@@ -93,7 +96,9 @@ class ProcessImage:
             unique_labels[counts/counts[unique_labels!=-1].max() > min_fraction], labels
         )
         hull = ConvexHull(self.canny_edge_all[large_enough])
-        return self.canny_edge_all[find_common_labels(labels[large_enough][hull.vertices], labels)]
+        return self.canny_edge_all[
+            find_common_labels(labels[large_enough][hull.vertices], labels)
+        ]
 
     def get_total_area(
         self,
@@ -199,6 +204,7 @@ class ProcessImage:
             self._elastic_net_perimeter.x[:indices]-center
         )
         self._elastic_net_perimeter.x[:indices] += center
+        self._stiched = True
 
     @property
     def total_perimeter(self):
@@ -208,6 +214,9 @@ class ProcessImage:
         return self._elastic_net_perimeter
 
     def unstich(self):
+        if not self._stiched:
+            return
+        self.ref_job.initialize()
         self._elastic_net_perimeter = self.canny_edge_perimeter.copy()
         self.run_elastic_net(**self.parameters['elastic_net'])
 
@@ -248,38 +257,6 @@ class ProcessImage:
         if mean:
             return np.mean(self.img[mean_color<self.white_color_threshold])
         return np.mean(self.img[mean_color<self.white_color_threshold], axis=0)
-
-    @property
-    def norm(self):
-        return self._norm*self.total_area
-
-    @norm.setter
-    def norm(self, n):
-        self._norm = n
-
-    def apply_minimum(self, size=6):
-        norm = np.mean(self.img, axis=-1)
-        if size > 0:
-            norm = ndimage.minimum_filter(norm, size=size)
-        self.norm = norm
-
-    def apply_maximum(self, size=1):
-        norm = np.mean(self.img, axis=-1)
-        if size > 0:
-            norm = ndimage.maximum_filter(norm, size=size)
-        self.norm = norm
-
-    def apply_median(self, size=1):
-        norm = np.mean(self.img, axis=-1)
-        if size > 0:
-            norm = ndimage.median_filter(norm, size=size)
-        self.norm = norm
-
-    def get_area(self, smoothened=True):
-        if smoothened:
-            return self.norm > self.white_color_threshold
-        else:
-            return np.mean(self.img, axis=-1) > self.white_color_threshold
 
     def _get_max_angle(self, x):
         center = np.stack(np.where(self.total_area), axis=-1).mean(axis=0)
@@ -344,7 +321,7 @@ class ProcessImage:
         dist_criterion = get_slope(dist/self.total_mean_radius, dist_interval)
         return np.any(fraction_criterion*dist_criterion > 0.5)
 
-    def get_index(
+    def get_points(
         self,
         ventricle='left',
         max_search=5,
@@ -355,110 +332,139 @@ class ProcessImage:
         indices_to_avoid=None,
         recursion=0,
     ):
-        if ventricle=='right':
-            if 'left' in self._indices.keys() and self._indices['left'] is None:
-                return None
-        cluster = self.white_area[:max_search]
+        if ventricle in self.white_area.tags:
+            return self.white_area.x[self.white_area.tags==ventricle]
+        if ventricle=='right' and not self.ref_job.left.exists():
+            return None
         heart_center = self.heart_area.mean(axis=0)
         distances = np.array([
-            np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1) for xx in cluster
+            np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1)
+            for xx in self.white_area.get_positions(tag='unknown')
         ])
-        size = np.array([len(xx) for xx in cluster])
+        size = self.white_area.get_counts(tag='unknown')
         if not self._satisfies_criteria(size, distances, dist_interval, fraction_interval):
-            self._indices[ventricle] = None
             return None
         if ventricle == 'left':
             x = self._get_radial_mean_value()[:max_search]
             indices = [
                 np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
             ]
-            if max_dist > 0:
-                indices = self._find_neighbors(max_dist, indices, max_angle=None)
-            self._indices['left'] = indices
+            # if max_dist > 0:
+            #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
+            self.white_area_tags[indices] = 'left'
         elif ventricle == 'right':
-            if indices_to_avoid is None and 'left' in self._indices.keys():
-                indices_to_avoid = np.array(self._indices['left'])
-            ratios = np.array([PCA().fit(xx).explained_variance_ratio_[0] for xx in cluster])
-            ratios[indices_to_avoid[indices_to_avoid<max_search]] = 0
+            ratios = np.array([
+                PCA().fit(xx).explained_variance_ratio_[0]
+                for xx in self.white_area.get_positions(tag='unknown')
+            ])
             ratios *= size
             ratios *= np.log(distances)
             indices = [np.argmax(ratios)]
-            if max_dist > 0:
-                indices = self._find_neighbors(
-                    max_dist,
-                    indices,
-                    indices_to_avoid,
-                    bias=np.array(bias),
-                    recursion=recursion
-                )
-        return np.unique(indices)
+            # if max_dist > 0:
+            #     indices = self._find_neighbors(
+            #         max_dist,
+            #         indices,
+            #         indices_to_avoid,
+            #         bias=np.array(bias),
+            #         recursion=recursion
+            #     )
+        indices = np.unique(indices)
+        self.white_area[indices] = ventricle
+        return self.white_area.x[self.white_area.tags==ventricle]
 
     def _get_radial_mean_value(self, center=None):
         if center is None:
             center = self.heart_area.mean(axis=0)
         x_mean_lst = []
-        for x in self.white_area:
-            xx = x-center
+        for l in self.white_area.unique_labels:
+            xx = self.white_area.x[l==self.white_area.all_labels]-center
             r_mean = np.linalg.norm(xx, axis=-1).mean()
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
         return np.array(x_mean_lst)
 
-    def _sort(self, cluster_labels, size):
-        w = np.where(self.get_area(True))
-        tree = cKDTree(data=np.stack(w, axis=-1))
-        self.apply_median(size=size)
-        x = np.stack(np.where(self.get_area(True)), axis=-1)
+    def _get_white_area(self, eps=3, min_samples=5, size=6, **kwargs):
+        area = self.apply_filter(ndimage.minimum_filter, size=size)
+        area = np.stack(np.where(area), axis=-1)
+        cluster_labels = DBSCAN(eps=eps, min_samples=min_samples).fit(area).labels_
+        tree = cKDTree(data=area)
+        x = np.stack(np.where(self.apply_filter(ndimage.median_filter, size=size)), axis=-1)
         dist, indices = tree.query(x, p=np.inf)
-        indices, x, dist = (xxx[dist<size] for xxx in (indices, x, dist))
-        labels, counts = np.unique(cluster_labels[indices], return_counts=True)
-        areas_to_return = []
-        self.background = []
-        for l in labels[np.argsort(counts)[::-1]]:
-            xx = x[cluster_labels[indices]==l]
-            if l == -1 or len(xx) < size**2:
-                continue
-            if np.any(xx>=np.array(self.img.shape)[:-1]-1) or np.any(xx<=0):
-                self.background = np.append(self.background, xx).reshape(-1, 2).astype(int)
-                continue
-            areas_to_return.append(xx)
-        return areas_to_return
+        indices, x = (xxx[dist<size] for xxx in (indices, x))
+        return WhiteArea(x[indices!=-1], cluster_labels[indices!=-1])
 
-    def run_cluster(self, eps=3, size=1, **kwargs):
-        leere = np.stack(np.where(self.get_area(True)), axis=-1)
-        return DBSCAN(eps=eps).fit(leere).labels_
+    def apply_filter(filter_to_apply, size):
+        area = self.get_image(mean=True)
+        area = filter_to_apply(area, size=size)
+        return area*self.total_area
 
     @property
     def white_area(self):
         if self._white_area is None:
-            if self.parameters['white']['apply_filter']:
-                self.apply_minimum(size=self.parameters['white']['size'])
-            cluster = self.run_cluster(**self.parameters['white'])
-            self._white_area = self._sort(
-                cluster, size=self.parameters['white']['size']
+            self._while_area = self._get_white_area(
+                **self.parameters['white']
             )
             if len(self._white_area)==0:
                 raise AssertionError('No white area detected')
         return self._white_area
 
+    def _throw_out_perimeter_white_area(
+        self, r_perimeter=3, perimeter_contact_interval=[0.3, 0], **kwargs
+    ):
+        self._contact_peri = np.array([
+            self.ref_job.heart.perimeter.tree.count_neighbors(
+                cKDTree(x), r_perimeter
+            )/r_perimeter**2/np.sqrt(len(x)) for x in self.get_white_area(tag='unknown')
+        ])
+        self._white_area_tags[self._contact_peri>np.max(perimeter_contact_interval)] = 'excess'
+
     @property
     def heart_area(self):
         return np.stack(np.where(self.total_area), axis=-1)
-
-    def get_points(self, points, index=0):
-        if index is None:
-            return np.array([])
-        index = np.array([index]).flatten()
-        x = points[index[0]]
-        if len(index)>1:
-            for ii in index[1:]:
-                x = np.concatenate((x, points[ii]))
-        return x
 
     def get_data(self, key, index=0):
         if key=='heart':
             return Area(self.heart_area, perimeter=self.total_perimeter)
         else:
-            return Area(self.get_points(self.white_area, index))
+            return Area(self.get_points(ventricle=key, **self.parameters[key]))
+
+class WhiteArea:
+    def __init__(self, positions, labels):
+        self.x = positions
+        _, self.all_indices = np.unique(labels, return_inverse=True)
+        unique_labels, counts = np.unique(self.all_indices, return_counts=True)
+        unique_labels = unique_labels[counts.argsort[::-1]]
+        self.all_indices = unique_labels[self.all_indices]
+        self.label_tree = cKDTree(self.all_indices.reshape(-1, 1))
+        self.counts = np.sort(counts)[::-1]
+        self.tags = np.array(len(unique_labels)['unknown'])
+
+    def __len__(self):
+        return len(self.counts)
+
+    def get_indices(self, tag='unknown', unique=False):
+        if unique:
+            if tag != 'all':
+                return self.unique_labels[self.tags==tag]
+            else
+                return self.unique_labels
+        if tag != 'all':
+            return self.tags[self.all_indices]==tag
+        else:
+            return np.array(len(self.all_indices)*[True])
+
+    def get_counts(self, tag='unknown'):
+        return self.counts[self.get_indices(tag=tag, unique=True)]
+
+    def get_positions(self, tag='unknown'):
+        if tag=='all':
+            indices = np.arange(len(self.tag))
+        else:
+            indices = np.where(self.tag==tag)[0]
+        for i in indices::
+            yield self.x[self.all_indices==i]
+
+    def __setitem__(self, index, tag):
+        self.tag[np.where(self.tags=='unknown')[index]] = tag
 
 def get_minim_white(img, x_min=400, sigma=4):
     for _ in range(10):

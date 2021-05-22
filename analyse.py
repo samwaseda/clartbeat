@@ -11,7 +11,12 @@ class Analyse:
             with open('default_parameters.txt', 'r') as f:
                 parameters = json.load(f)
         self.parameters = parameters
-        self.image = ProcessImage(file_name=file_name, parameters=self.parameters['processing'])
+        self.image = ProcessImage(
+            ref_job=self, file_name=file_name, parameters=self.parameters['processing']
+        )
+        self.initialize()
+
+    def initialize(self):
         self._heart = None
         self._right = None
         self._left = None
@@ -30,9 +35,7 @@ class Analyse:
         if self._left is None:
             if self._heart is None:
                 _ = self.heart
-            self._left = self.image.get_data(
-                'white', self.image.get_index('left', **self.parameters['processing']['left'])
-            )
+            self._left = self.image.get_data('left')
         return self._left
 
     @property
@@ -40,12 +43,7 @@ class Analyse:
         if self._right is None:
             if self._left is None:
                 _ = self.left
-            self._right = self.image.get_data(
-                'white', self.image.get_index(
-                    'right',
-                    **self.parameters['processing']['right'],
-                )
-            )
+            self._right = self.image.get_data('right')
         return self._right
 
     @property
