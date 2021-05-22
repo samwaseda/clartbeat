@@ -28,7 +28,7 @@ class Area:
             self._perimeter = perimeter
 
     def exists(self):
-        return len(self.points) > 0:
+        return len(self.points) > 0
 
     @property
     def tree(self):

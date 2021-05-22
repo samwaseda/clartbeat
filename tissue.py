@@ -59,14 +59,18 @@ class Tissue:
     def _fill_white(self):
         mean_color = np.mean(self.img[self.positions[:,0], self.positions[:,1]], axis=0)
         img = np.ones_like(self.img)*mean_color
-        img[self.positions[:,0], self.positions[:,1]] = self.img[self.positions[:,0], self.positions[:,1]]
+        img[self.positions[:,0], self.positions[:,1]] = self.img[
+            self.positions[:,0], self.positions[:,1]
+        ]
         return img
 
     def get_median_filter(self, size=6):
         if size > 0:
             tree = cKDTree(self.positions)
             distances, indices = tree.query(
-                self.positions, k=np.rint(np.pi*(1+size)**2).astype(int), distance_upper_bound=size
+                self.positions,
+                k=np.rint(np.pi*(1+size)**2).astype(int),
+                distance_upper_bound=size
             )
             positions = self.positions[indices[distances<np.inf]]
             if self._has_colors:
@@ -85,8 +89,7 @@ class Tissue:
             img_white = frangi(img, sigmas=sigmas, black_ridges=False)
             total_area[img_white>ridge_threshold] = False
         if white_areas is not None:
-            for x in white_areas:
-                total_area[x[:,0], x[:,1]] = False
+            total_area[white_areas.x[:,0], white_areas.x[:,1]] = False
         return np.stack(np.where(total_area), axis=-1)
 
     def _get_zones(self, name):
