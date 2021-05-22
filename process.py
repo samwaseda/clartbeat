@@ -405,7 +405,7 @@ class ProcessImage:
                 raise AssertionError('No white area detected')
         return self._white_area
 
-    def _throw_out_perimeter_white_area(
+    def _remove_perimeter_white_area(
         self, r_perimeter=3, perimeter_contact_interval=[0.3, 0], **kwargs
     ):
         self._contact_peri = np.array([
@@ -431,7 +431,7 @@ class WhiteArea:
         _, self.all_indices = np.unique(labels, return_inverse=True)
         unique_labels, counts = np.unique(self.all_indices, return_counts=True)
         unique_labels = unique_labels[counts.argsort()[::-1]]
-        self.all_indices = unique_labels[self.all_indices]
+        self.all_indices = np.argsort(unique_labels)[self.all_indices]
         self.counts = np.sort(counts)[::-1]
         self.tags = np.array(len(unique_labels)*['unknown'])
 
@@ -462,6 +462,9 @@ class WhiteArea:
 
     def get_all_positions(self, tag):
         return self.x[(self.tags==tag)[self.all_indices]]
+
+    def get_all_tags(self, tag):
+        return self.tags[(self.tags==tag)[self.all_indices]]
 
     def __setitem__(self, index, tag):
         self.tags[np.where(self.tags=='unknown')[0][index]] = tag
