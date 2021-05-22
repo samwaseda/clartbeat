@@ -40,7 +40,7 @@ class Tissue:
         self.img = img.copy()
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
-        self.positions = self._remove_white(total_area, sigmas, white_areas)
+        self.positions = self._remove_white(total_area.copy(), sigmas, white_areas)
         if fill_white:
             self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)

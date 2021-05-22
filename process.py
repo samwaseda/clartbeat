@@ -314,7 +314,7 @@ class ProcessImage:
     def total_mean_radius(self):
         return np.sqrt(np.sum(self.total_area)/np.pi)
 
-    def _satisfies_criteria(self, size, dist, dist_interval=None, fraction_interval=None):
+    def _left_lumen_exists(self, size, dist, dist_interval=None, fraction_interval=None):
         if dist_interval is None or fraction_interval is None:
             return True
         fraction_criterion = get_slope(size/np.sum(self.total_area), fraction_interval)
@@ -324,12 +324,10 @@ class ProcessImage:
     def get_points(
         self,
         ventricle='left',
-        max_search=5,
         max_dist=5,
         bias=np.ones(2),
         dist_interval=None,
         fraction_interval=None,
-        indices_to_avoid=None,
         recursion=0,
     ):
         if ventricle in self.white_area.tags:
@@ -340,22 +338,20 @@ class ProcessImage:
         distances = np.array([
             np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1)
             for xx in self.white_area.get_positions(tag='unknown')
-        ])[:max_search]
-        size = self.white_area.get_counts(tag='unknown')[:max_search]
-        if not self._satisfies_criteria(size, distances, dist_interval, fraction_interval):
-            return None
+        ])
+        size = self.white_area.get_counts(tag='unknown')
         if ventricle == 'left':
-            x = self._get_radial_mean_value()[:max_search]
-            indices = [
-                np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
-            ]
+            if not self._left_lumen_exists(size, distances, dist_interval, fraction_interval):
+                return None
+            x = self._get_radial_mean_value()
+            indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
             # if max_dist > 0:
             #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
         elif ventricle == 'right':
             ratios = np.array([
                 PCA().fit(xx).explained_variance_ratio_[0]
                 for xx in self.white_area.get_positions(tag='unknown')
-            ])[:max_search]
+            ])
             ratios *= size
             ratios *= np.log(distances)
             indices = [np.argmax(ratios)]
@@ -363,7 +359,6 @@ class ProcessImage:
             #     indices = self._find_neighbors(
             #         max_dist,
             #         indices,
-            #         indices_to_avoid,
             #         bias=np.array(bias),
             #         recursion=recursion
             #     )
@@ -387,7 +382,7 @@ class ProcessImage:
         labels = DBSCAN(eps=eps, min_samples=min_samples).fit(area).labels_
         tree = cKDTree(data=area)
         x = np.stack(np.where(self.apply_filter(ndimage.median_filter, size=size)), axis=-1)
-        dist, indices = tree.query(x, p=np.inf)
+        dist, indices = tree.query(x, p=np.inf, distance_upper_bound=size)
         indices, x = (xxx[dist<size] for xxx in (indices, x))
         cond = labels[indices]!=-1
         return WhiteArea(x[cond], labels[indices[cond]])
@@ -403,17 +398,34 @@ class ProcessImage:
             self._white_area = self._get_white_area(**self.parameters['white'])
             if len(self._white_area)==0:
                 raise AssertionError('No white area detected')
+            if 'perimeter_contact_interval' in self.parameters['white'].keys():
+                self.parameters['white']['max_ratio'] = np.max(
+                    self.parameters['white']['perimeter_contact_interval']
+                )
+            self._remove_perimeter_white_area(**self.parameters['white'])
         return self._white_area
 
+    def _get_contact_counts(self, tree, r_max=3):
+        dist, _ = tree.query(
+            self.white_area.get_all_positions(tag='unknown'),
+            distance_upper_bound=r_max
+        )
+        indices, counts = np.unique(
+            self.white_area.get_all_indices(tag='unknown')[dist<np.inf],
+            return_counts=True
+        )
+        return indices, counts/r_max**2/np.sqrt(
+            self.white_area.counts[indices]
+        )
+
     def _remove_perimeter_white_area(
-        self, r_perimeter=3, perimeter_contact_interval=[0.3, 0], **kwargs
+        self, r_perimeter=3, max_ratio=0.3, **kwargs
     ):
-        self._contact_peri = np.array([
-            self.ref_job.heart.perimeter.tree.count_neighbors(
-                cKDTree(x), r_perimeter
-            )/r_perimeter**2/np.sqrt(len(x)) for x in self.get_white_area(tag='unknown')
-        ])
-        self._white_area_tags[self._contact_peri>np.max(perimeter_contact_interval)] = 'excess'
+        indices, values = self._get_contact_counts(
+            tree=self.ref_job.heart.perimeter.tree, r_max=r_perimeter
+        )
+        cond = values > max_ratio
+        self.white_area.tags[indices[cond]] = 'excess'
 
     @property
     def heart_area(self):
@@ -443,7 +455,7 @@ class WhiteArea:
             if tag != 'all':
                 return self.tags==tag
             else:
-                return np.array(len(self.tags)*[True])
+                return np.array(len(self)*[True])
         if tag != 'all':
             return self.tags[self.all_indices]==tag
         else:
@@ -454,7 +466,7 @@ class WhiteArea:
 
     def get_positions(self, tag='unknown'):
         if tag=='all':
-            indices = np.arange(len(self.tag))
+            indices = np.arange(len(self))
         else:
             indices = np.where(self.tags==tag)[0]
         for i in indices:
@@ -463,8 +475,15 @@ class WhiteArea:
     def get_all_positions(self, tag):
         return self.x[(self.tags==tag)[self.all_indices]]
 
-    def get_all_tags(self, tag):
-        return self.tags[(self.tags==tag)[self.all_indices]]
+    def get_all_indices(self, tag):
+        return self.all_indices[(self.tags==tag)[self.all_indices]]
+
+    def fill(self, values, indices=None, filler=0.0, tag='unknown'):
+        if indices is None:
+            indices = self.get_indices(tag='unknown', unique=True)
+        arr = np.array(len(self)*[filler])
+        arr[indices] = values
+        return arr
 
     def __setitem__(self, index, tag):
         self.tags[np.where(self.tags=='unknown')[0][index]] = tag
