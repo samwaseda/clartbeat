@@ -60,7 +60,7 @@ class Analyse:
     @property
     def left_ventricle(self):
         if self._left_ventricle is None:
-            if len(self.left.points)==0:
+            if len(self.left)==0 or len(self.right)==0:
                 return None
             self._left_ventricle = LeftVentricle(self)
         return self._left_ventricle

@@ -7,7 +7,7 @@ from scipy.spatial import cKDTree
 
 def value_or_zero(func):
     def original_function(self, *args, **kwargs):
-        if len(self.points)==0:
+        if len(self)==0:
             return 0
         else:
             return func(self, *args, **kwargs)
@@ -28,7 +28,7 @@ class Area:
             self._perimeter = perimeter
 
     def exists(self):
-        return len(self.points) > 0
+        return len(self) > 0
 
     def __len__(self):
         return len(self.points)
@@ -46,7 +46,7 @@ class Area:
     @property
     def delaunay(self):
         if self._delaunay is None:
-            if self.points is None or len(self.points)==0:
+            if self.points is None or len(self)==0:
                 self._delaunnay = Surface(None)
             self._delaunay = Surface(self.points[self.get_delaunay_vertices()])
         return self._delaunay
@@ -153,7 +153,7 @@ class Area:
     def trace_pca(
         self, ref_center, polynomial_order=None, angle_threshold=0.6, number_of_points=360
     ):
-        if self.points is None or len(self.points)==0:
+        if self.points is None or len(self)==0:
             return Surface(None)
         r, phi = self.get_polar_coordinates(ref_center=ref_center)
         if polynomial_order is None:
@@ -189,7 +189,7 @@ class Area:
         elif mode=='delaunay':
             return self._get_delaunay_volume(max_distance=max_distance, keep_intern=keep_intern)
         elif mode=='points':
-            return len(self.points)
+            return len(self)
         elif mode=='pca':
             return np.prod(self.get_length())*np.pi
         else:

@@ -67,7 +67,8 @@
             "contact_interval": [0.3, 0.0],
             "curvature_sigmas": [20, 30],
             "curvature_sigma_interval": [0.08, 0.12],
-            "curvature_interval": [0.002, -0.002]
+            "curvature_interval": [0.002, -0.002],
+            "min_weight": 0.002
         }
     },
     "tissue": {

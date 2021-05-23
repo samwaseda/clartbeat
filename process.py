@@ -346,36 +346,47 @@ class ProcessImage:
         self.white_area[indices] = 'left'
         return self.white_area.get_all_positions('left')
 
-    def _get_rl_contact_counts(self, tree, r_max, contact_interval):
-        indices, values = self._get_contact_counts(tree=tree, r_max=r_max)
-        return self.white_area.fill(get_slope(values, contact_interval), indices, filler=1.0)
+    def _get_rl_contact_counts(self, tree, r_max, contact_interval, tag='unknown'):
+        indices, values = self._get_contact_counts(tree=tree, r_max=r_max, tag=tag)
+        return self.white_area.fill(
+            get_slope(values, contact_interval), indices, filler=1.0, tag=tag
+        )
 
-    def _get_rl_perimeter(self, r_max=3, contact_interval=[0.3, 0]):
+    def _get_rl_perimeter(self, r_max=3, contact_interval=[0.3, 0], tag='unknown'):
         return self._get_rl_contact_counts(
-            self.ref_job.heart.perimeter.tree, r_max=r_max, contact_interval=contact_interval
+            self.ref_job.heart.perimeter.tree,
+            r_max=r_max,
+            contact_interval=contact_interval,
+            tag=tag
         )
 
-    def _get_rl_left(self, r_max=5, contact_interval=[0.3, 0]):
+    def _get_rl_left(self, r_max=5, contact_interval=[0.3, 0], tag='unknown'):
         return self._get_rl_contact_counts(
-            self.ref_job.left.tree, r_max=r_max, contact_interval=contact_interval
+            self.ref_job.left.tree, r_max=r_max, contact_interval=contact_interval, tag=tag
         )
 
-    def _get_rl_size(self):
-        return self.white_area.fill(self.white_area.get_counts()/len(self.heart_area))
-
-    def _get_rl_distance(self):
-        distance = np.log10(
-            self.ref_job.left.pca.get_scaled_distance(self._get_radial_mean_value())
+    def _get_rl_size(self, tag='unknown'):
+        return self.white_area.fill(
+            self.white_area.get_counts(tag=tag)/len(self.heart_area), tag=tag
         )
-        distance += np.log10(self.ref_job.left.get_length().mean())
-        distance -= np.log10(self.ref_job.heart.get_length().mean())
-        return self.white_area.fill(get_softplus(distance))
+
+    def _get_rl_distance(self, tag='unknown'):
+        distance = np.log(
+            self.ref_job.left.pca.get_scaled_distance(self._get_radial_mean_value(tag=tag))
+        )
+        distance += np.log(self.ref_job.left.get_length().mean())
+        distance -= np.log(self.ref_job.heart.get_length().mean())
+        return self.white_area.fill(get_softplus(distance), tag=tag)
 
     def _get_rl_curvature(
-        self, sigmas=[20, 30], sigma_interval=[0.08, 0.12], curvature_interval=[0.002, -0.002]
+        self,
+        sigmas=[20, 30],
+        sigma_interval=[0.08, 0.12],
+        curvature_interval=[0.002, -0.002],
+        tag='unknown'
     ):
         sigma = sigmas[0]+get_slope(
-            np.sqrt(self.white_area.get_counts('unknown').max()/len(self.heart_area)),
+            np.sqrt(self.white_area.get_counts(tag=tag).max()/len(self.heart_area)),
             sigma_interval
         )*np.diff(sigmas)[0]
         return self.white_area.fill(get_slope([
@@ -385,8 +396,8 @@ class ProcessImage:
                 sigma=sigma,
                 laplacian=True
             )
-            for x in self.white_area.get_positions()
-        ], curvature_interval))
+            for x in self.white_area.get_positions(tag=tag)
+        ], curvature_interval), tag=tag)
 
     def get_rl_weights(
         self,
@@ -395,16 +406,18 @@ class ProcessImage:
         contact_interval=[0.3, 0],
         curvature_sigmas=[20, 30],
         curvature_sigma_interval=[0.08, 0.12],
-        curvature_interval=[0.002, -0.002]
+        curvature_interval=[0.002, -0.002],
+        tag='unknown',
     ):
-        w = self._get_rl_perimeter(r_max=r_perimeter, contact_interval=contact_interval)
-        w *= self._get_rl_left(r_max=r_left, contact_interval=contact_interval)
-        w *= self._get_rl_size()
-        w *= self._get_rl_distance()
+        w = self._get_rl_perimeter(r_max=r_perimeter, contact_interval=contact_interval, tag=tag)
+        w *= self._get_rl_left(r_max=r_left, contact_interval=contact_interval, tag=tag)
+        w *= self._get_rl_size(tag=tag)
+        w *= self._get_rl_distance(tag=tag)
         w *= self._get_rl_curvature(
             sigmas=curvature_sigmas,
             sigma_interval=curvature_sigma_interval,
-            curvature_interval=curvature_interval
+            curvature_interval=curvature_interval,
+            tag=tag
         )
         return w
 
@@ -419,21 +432,24 @@ class ProcessImage:
         contact_interval=[0.3, 0],
         curvature_sigmas=[20, 30],
         curvature_sigma_interval=[0.08, 0.12],
-        curvature_interval=[0.002, -0.002]
+        curvature_interval=[0.002, -0.002],
+        min_weight=0.002
     ):
         if 'right' in self.white_area.tags:
             return self.white_area.get_all_positions('right')
         if not self.ref_job.left.exists():
             return None
-        indices = np.argmax(self.get_rl_weights
-        (
+        weights = self.get_rl_weights(
             r_perimeter=r_perimeter,
             r_left=r_left,
             contact_interval=contact_interval,
             curvature_sigmas=curvature_sigmas,
             curvature_sigma_interval=curvature_sigma_interval,
             curvature_interval=curvature_interval
-        ))
+        )
+        if weights.max() < min_weight:
+            return None
+        indices = np.argmax(weights)
         # if max_dist > 0:
         #     indices = self._find_neighbors(
         #         max_dist,
@@ -444,11 +460,11 @@ class ProcessImage:
         self.white_area.tags[indices] = 'right'
         return self.white_area.get_all_positions('right')
 
-    def _get_radial_mean_value(self, center=None):
+    def _get_radial_mean_value(self, center=None, tag='unknown'):
         if center is None:
             center = self.heart_area.mean(axis=0)
         x_mean_lst = []
-        for x in self.white_area.get_positions(tag='unknown'):
+        for x in self.white_area.get_positions(tag=tag):
             xx = x-center
             r_mean = np.linalg.norm(xx, axis=-1).mean()
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
@@ -483,13 +499,13 @@ class ProcessImage:
             self._remove_perimeter_white_area(**self.parameters['white'])
         return self._white_area
 
-    def _get_contact_counts(self, tree, r_max=3):
+    def _get_contact_counts(self, tree, r_max=3, tag='unknown'):
         dist, _ = tree.query(
-            self.white_area.get_all_positions(tag='unknown'),
+            self.white_area.get_all_positions(tag=tag),
             distance_upper_bound=r_max
         )
         indices, counts = np.unique(
-            self.white_area.get_all_indices(tag='unknown')[dist<np.inf],
+            self.white_area.get_all_indices(tag=tag)[dist<np.inf],
             return_counts=True
         )
         return indices, counts/r_max**2/np.sqrt(
@@ -532,43 +548,41 @@ class WhiteArea:
     def __len__(self):
         return len(self.counts)
 
-    def get_indices(self, tag='unknown', unique=False):
-        if unique:
-            return self.get_tags(tag, boolean=True)
-        if tag != 'all':
-            return self.tags[self.all_indices]==tag
-        else:
-            return np.array(len(self.all_indices)*[True])
-
     def get_counts(self, tag='unknown'):
-        return self.counts[self.get_indices(tag=tag, unique=True)]
+        return self.counts[self.get_indices(tag=tag, unique=True, boolean=True)]
 
     def get_positions(self, tag='unknown'):
-        indices = self.get_tags(tag, boolean=False)
+        indices = self.get_indices(tag=tag, unique=True, boolean=False)
         for i in indices:
             yield self.x[self.all_indices==i]
 
     def get_all_positions(self, tag):
-        return self.x[self.get_tags(tag)[self.all_indices]]
+        return self.x[self.get_indices(tag=tag, unique=True, boolean=True)[self.all_indices]]
 
     def get_all_indices(self, tag):
-        return self.all_indices[self.get_tags(tag)[self.all_indices]]
+        return self.all_indices[
+            self.get_indices(tag=tag, unique=True, boolean=True)[self.all_indices]
+        ]
 
     def fill(self, values, indices=None, filler=0.0, tag='unknown'):
         if indices is None:
-            indices = self.get_indices(tag='unknown', unique=True)
+            indices = self.get_indices(tag=tag, unique=True, boolean=True)
         arr = np.array(len(self)*[filler])
         arr[indices] = values
         return arr
 
-    def get_tags(self, tag, boolean=True):
+    def get_indices(self, tag='unknown', unique=False, boolean=False):
+        if unique:
+            tag_lst = self.tags
+        else:
+            tag_lst = self.tags[self.all_indices]
         if isinstance(tag, str):
             if tag == 'all':
-                v = np.array(len(self)*[True])
+                v = np.array(len(tag_lst)*[True])
             else:
-                v = self.tags == tag
+                v = tag_lst == tag
         else:
-            v = np.any(self.tags[:,None]==np.asarray(tag)[None,:], axis=1)
+            v = np.any(tag_lst[:,None]==np.asarray(tag)[None,:], axis=1)
         if boolean:
             return v
         else:
