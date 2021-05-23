@@ -343,8 +343,8 @@ class ProcessImage:
         # if max_dist > 0:
         #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
         indices = np.unique(indices)
-        self.white_area[indices] = 'right'
-        return self.white_area.get_all_positions('right')
+        self.white_area[indices] = 'left'
+        return self.white_area.get_all_positions('left')
 
     def _get_rl_contact_counts(self, tree, r_max, contact_interval):
         indices, values = self._get_contact_counts(tree=tree, r_max=r_max)
@@ -371,12 +371,18 @@ class ProcessImage:
         distance -= np.log10(self.ref_job.heart.get_length().mean())
         return self.white_area.fill(get_softplus(distance))
 
-    def _get_rl_curvature(self, curvature_sigma=30, curvature_interval=[0.002, -0.002]):
+    def _get_rl_curvature(
+        self, sigmas=[20, 30], sigma_interval=[0.25, 0.35], curvature_interval=[0.002, -0.002]
+    ):
+        sigma = sigmas[0]+get_slope(
+            np.sqrt(len(self.white_area.get_all_indices('unknown'))/len(self.heart_area)),
+            sigma_interval
+        )*np.diff(sigmas)[0]
         return self.white_area.fill(get_slope([
             self.ref_job.heart.perimeter.get_crossing_curvature(
                 self.ref_job.left.get_center(),
                 np.mean(x, axis=0),
-                sigma=curvature_sigma,
+                sigma=sigma,
                 laplacian=True
             )
             for x in self.white_area.get_positions()
@@ -388,6 +394,7 @@ class ProcessImage:
         r_left=5,
         contact_interval=[0.3, 0],
         curvature_sigma=30,
+        curvature_sigma_interval=[0.25, 0.35],
         curvature_interval=[0.002, -0.002]
     ):
         w = self._get_rl_perimeter(r_max=r_perimeter, contact_interval=contact_interval)
@@ -395,7 +402,9 @@ class ProcessImage:
         w *= self._get_rl_size()
         w *= self._get_rl_distance()
         w *= self._get_rl_curvature(
-            curvature_sigma=curvature_sigma, curvature_interval=curvature_interval
+            sigmas=curvature_sigma,
+            sigma_interval=curvature_sigma_interval,
+            curvature_interval=curvature_interval
         )
         return w
 
