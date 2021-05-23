@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import damp, get_slope, MyPCA, find_common_labels
+from tools import damp, get_slope, MyPCA, find_common_labels, get_softplus
 from surface import Surface
 
 class ProcessImage:
@@ -321,50 +321,117 @@ class ProcessImage:
         dist_criterion = get_slope(dist/self.total_mean_radius, dist_interval)
         return np.any(fraction_criterion*dist_criterion > 0.5)
 
-    def get_points(
+    def get_left_lumen(
         self,
-        ventricle='left',
         max_dist=5,
-        bias=np.ones(2),
         dist_interval=None,
-        fraction_interval=None,
+        fraction_interval=[0.001, 0.006],
         recursion=0,
     ):
-        if ventricle in self.white_area.tags:
-            return self.white_area.get_all_positions(ventricle)
-        if ventricle=='right' and not self.ref_job.left.exists():
-            return None
+        if 'left' in self.white_area.tags:
+            return self.white_area.get_all_positions('left')
         heart_center = self.heart_area.mean(axis=0)
         distances = np.array([
             np.linalg.norm(heart_center-np.mean(xx, axis=0), axis=-1)
             for xx in self.white_area.get_positions(tag='unknown')
         ])
         size = self.white_area.get_counts(tag='unknown')
-        if ventricle == 'left':
-            if not self._left_lumen_exists(size, distances, dist_interval, fraction_interval):
-                return None
-            x = self._get_radial_mean_value()
-            indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
-            # if max_dist > 0:
-            #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
-        elif ventricle == 'right':
-            ratios = np.array([
-                PCA().fit(xx).explained_variance_ratio_[0]
-                for xx in self.white_area.get_positions(tag='unknown')
-            ])
-            ratios *= size
-            ratios *= np.log(distances)
-            indices = [np.argmax(ratios)]
-            # if max_dist > 0:
-            #     indices = self._find_neighbors(
-            #         max_dist,
-            #         indices,
-            #         bias=np.array(bias),
-            #         recursion=recursion
-            #     )
+        if not self._left_lumen_exists(size, distances, dist_interval, fraction_interval):
+            return None
+        x = self._get_radial_mean_value()
+        indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
+        # if max_dist > 0:
+        #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
         indices = np.unique(indices)
-        self.white_area[indices] = ventricle
-        return self.white_area.get_all_positions(ventricle)
+        self.white_area[indices] = 'right'
+        return self.white_area.get_all_positions('right')
+
+    def _get_rl_contact_counts(self, tree, r_max, contact_interval):
+        indices, values = self._get_contact_counts(tree=tree, r_max=r_max)
+        return self.white_area.fill(get_slope(values, contact_interval), indices, filler=1.0)
+
+    def _get_rl_perimeter(self, r_max=3, contact_interval=[0.3, 0]):
+        return self._get_rl_contact_counts(
+            self.ref_job.heart.perimeter.tree, r_max=r_max, contact_interval=contact_interval
+        )
+
+    def _get_rl_left(self, r_max=5, contact_interval=[0.3, 0]):
+        return self._get_rl_contact_counts(
+            self.ref_job.left.tree, r_max=r_max, contact_interval=contact_interval
+        )
+
+    def _get_rl_size(self):
+        return self.white_area.fill(self.white_area.get_counts()/len(self.heart_area))
+
+    def _get_rl_distance(self):
+        distance = np.log10(
+            self.ref_job.left.pca.get_scaled_distance(self._get_radial_mean_value())
+        )
+        distance += np.log10(self.ref_job.left.get_length().mean())
+        distance -= np.log10(self.ref_job.heart.get_length().mean())
+        return self.white_area.fill(get_softplus(distance))
+
+    def _get_rl_curvature(self, curvature_sigma=30, curvature_interval=[0.002, -0.002]):
+        return self.white_area.fill(get_slope([
+            self.ref_job.heart.perimeter.get_crossing_curvature(
+                self.ref_job.left.get_center(),
+                np.mean(x, axis=0),
+                sigma=curvature_sigma,
+                laplacian=True
+            )
+            for x in self.white_area.get_positions()
+        ], curvature_interval))
+
+    def get_rl_weights(
+        self,
+        r_perimeter=3,
+        r_left=5,
+        contact_interval=[0.3, 0],
+        curvature_sigma=30,
+        curvature_interval=[0.002, -0.002]
+    ):
+        w = self._get_rl_perimeter(r_max=r_perimeter, contact_interval=contact_interval)
+        w *= self._get_rl_left(r_max=r_left, contact_interval=contact_interval)
+        w *= self._get_rl_size()
+        w *= self._get_rl_distance()
+        w *= self._get_rl_curvature(
+            curvature_sigma=curvature_sigma, curvature_interval=curvature_interval
+        )
+        return w
+
+    def get_right_lumen(
+        self,
+        max_dist=5,
+        bias=[1.5, 0.2],
+        dist_interval=None,
+        recursion=0,
+        r_perimeter=3,
+        r_left=5,
+        contact_interval=[0.3, 0],
+        curvature_sigma=30,
+        curvature_interval=[0.002, -0.002]
+    ):
+        if 'right' in self.white_area.tags:
+            return self.white_area.get_all_positions('right')
+        if not self.ref_job.left.exists():
+            return None
+        indices = np.argmax(self.get_rl_weights
+        (
+            r_perimeter=r_perimeter,
+            r_left=r_left,
+            contact_interval=contact_interval,
+            curvature_sigma=curvature_sigma,
+            curvature_interval=curvature_interval
+        ))
+        # if max_dist > 0:
+        #     indices = self._find_neighbors(
+        #         max_dist,
+        #         indices,
+        #         bias=np.array(bias),
+        #         recursion=recursion
+        #     )
+        self.white_area.tags[indices] = 'right'
+        return self.white_area.get_all_positions('right')
 
     def _get_radial_mean_value(self, center=None):
         if center is None:
@@ -434,8 +501,12 @@ class ProcessImage:
     def get_data(self, key):
         if key=='heart':
             return Area(self.heart_area, perimeter=self.total_perimeter)
+        elif key=='left':
+            return Area(self.get_left_lumen(**self.parameters['left']))
+        elif key=='right':
+            return Area(self.get_right_lumen(**self.parameters['right']))
         else:
-            return Area(self.get_points(ventricle=key, **self.parameters[key]))
+            raise KeyError(key + ' not recognized')
 
 class WhiteArea:
     def __init__(self, positions, labels):
