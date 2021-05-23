@@ -65,8 +65,8 @@
             "r_perimeter": 3,
             "r_left": 5,
             "contact_interval": [0.3, 0.0],
-            "curvature_sigma": 30,
-            "curvature_sigma_interval": [0.25, 0.35],
+            "curvature_sigmas": [20, 30],
+            "curvature_sigma_interval": [0.08, 0.12],
             "curvature_interval": [0.002, -0.002]
         }
     },

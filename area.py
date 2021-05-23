@@ -30,6 +30,9 @@ class Area:
     def exists(self):
         return len(self.points) > 0
 
+    def __len__(self):
+        return len(self.points)
+
     @property
     def tree(self):
         if self._tree is None:

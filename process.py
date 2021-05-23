@@ -372,10 +372,10 @@ class ProcessImage:
         return self.white_area.fill(get_softplus(distance))
 
     def _get_rl_curvature(
-        self, sigmas=[20, 30], sigma_interval=[0.25, 0.35], curvature_interval=[0.002, -0.002]
+        self, sigmas=[20, 30], sigma_interval=[0.08, 0.12], curvature_interval=[0.002, -0.002]
     ):
         sigma = sigmas[0]+get_slope(
-            np.sqrt(len(self.white_area.get_all_indices('unknown'))/len(self.heart_area)),
+            np.sqrt(self.white_area.get_counts('unknown').max()/len(self.heart_area)),
             sigma_interval
         )*np.diff(sigmas)[0]
         return self.white_area.fill(get_slope([
@@ -393,8 +393,8 @@ class ProcessImage:
         r_perimeter=3,
         r_left=5,
         contact_interval=[0.3, 0],
-        curvature_sigma=30,
-        curvature_sigma_interval=[0.25, 0.35],
+        curvature_sigmas=[20, 30],
+        curvature_sigma_interval=[0.08, 0.12],
         curvature_interval=[0.002, -0.002]
     ):
         w = self._get_rl_perimeter(r_max=r_perimeter, contact_interval=contact_interval)
@@ -402,7 +402,7 @@ class ProcessImage:
         w *= self._get_rl_size()
         w *= self._get_rl_distance()
         w *= self._get_rl_curvature(
-            sigmas=curvature_sigma,
+            sigmas=curvature_sigmas,
             sigma_interval=curvature_sigma_interval,
             curvature_interval=curvature_interval
         )
@@ -417,7 +417,8 @@ class ProcessImage:
         r_perimeter=3,
         r_left=5,
         contact_interval=[0.3, 0],
-        curvature_sigma=30,
+        curvature_sigmas=[20, 30],
+        curvature_sigma_interval=[0.08, 0.12],
         curvature_interval=[0.002, -0.002]
     ):
         if 'right' in self.white_area.tags:
@@ -429,7 +430,8 @@ class ProcessImage:
             r_perimeter=r_perimeter,
             r_left=r_left,
             contact_interval=contact_interval,
-            curvature_sigma=curvature_sigma,
+            curvature_sigmas=curvature_sigmas,
+            curvature_sigma_interval=curvature_sigma_interval,
             curvature_interval=curvature_interval
         ))
         # if max_dist > 0:
@@ -532,10 +534,7 @@ class WhiteArea:
 
     def get_indices(self, tag='unknown', unique=False):
         if unique:
-            if tag != 'all':
-                return self.tags==tag
-            else:
-                return np.array(len(self)*[True])
+            return self.get_tags(tag, boolean=True)
         if tag != 'all':
             return self.tags[self.all_indices]==tag
         else:
@@ -545,18 +544,15 @@ class WhiteArea:
         return self.counts[self.get_indices(tag=tag, unique=True)]
 
     def get_positions(self, tag='unknown'):
-        if tag=='all':
-            indices = np.arange(len(self))
-        else:
-            indices = np.where(self.tags==tag)[0]
+        indices = self.get_tags(tag, boolean=False)
         for i in indices:
             yield self.x[self.all_indices==i]
 
     def get_all_positions(self, tag):
-        return self.x[(self.tags==tag)[self.all_indices]]
+        return self.x[self.get_tags(tag)[self.all_indices]]
 
     def get_all_indices(self, tag):
-        return self.all_indices[(self.tags==tag)[self.all_indices]]
+        return self.all_indices[self.get_tags(tag)[self.all_indices]]
 
     def fill(self, values, indices=None, filler=0.0, tag='unknown'):
         if indices is None:
@@ -564,6 +560,19 @@ class WhiteArea:
         arr = np.array(len(self)*[filler])
         arr[indices] = values
         return arr
+
+    def get_tags(self, tag, boolean=True):
+        if isinstance(tag, str):
+            if tag == 'all':
+                v = np.array(len(self)*[True])
+            else:
+                v = self.tags == tag
+        else:
+            v = np.any(self.tags[:,None]==np.asarray(tag)[None,:], axis=1)
+        if boolean:
+            return v
+        else:
+            return np.where(v)[0]
 
     def __setitem__(self, index, tag):
         self.tags[np.where(self.tags=='unknown')[0][index]] = tag
