@@ -524,6 +524,13 @@ class ProcessImage:
         cond = values > max_ratio
         self.white_area.tags[indices[cond]] = 'excess'
 
+    def get_canvas(self, x, values=1, fill_value=np.nan):
+        img = np.full(self.img.shape[:-1], fill_value=fill_value)
+        if isinstance(x, Area):
+            x = x.points
+        img[x[:,0], x[:,1]] = values
+        return img
+
     @property
     def heart_area(self):
         return np.stack(np.where(self.total_area), axis=-1)

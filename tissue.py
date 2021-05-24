@@ -11,13 +11,13 @@ class Tissue:
         total_area,
         white_areas=None,
         scar_coeff=np.array([
-            90.28205419,
-            76.98283148,
-            126.75059511,
-            106.03962742,
-            -305.73676848,
-            -142.75818544,
-            8.75126572
+            46.52921906,
+            3.23609218,
+            98.23216708,
+            83.06536593,
+            -197.3677132,
+            -59.32161332,
+            10.49473852
         ]),
         wrinkle_coeff=np.array([
             105.81948491,
@@ -96,7 +96,7 @@ class Tissue:
         return np.where(self._names==name)[0][0]
 
     def get_distance(self):
-        colors = self.img[self.positions[:,0], self.positions[:,1]]
+        colors = self.img[tuple(self.positions.T)]
         base_color = np.mean(colors, axis=0)
         self.all_labels = np.tile(self._get_zones('muscle'), len(self.positions))
         values = np.sum(colors*self.scar_coeff[3:6], axis=-1)

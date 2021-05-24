@@ -72,11 +72,6 @@ class Area:
             x = np.einsum('ij,nj->ni', self.pca.components_, self.points)
             return x.max(axis=0)-x.min(axis=0)
 
-    def get_canvas(self, shape):
-        img = np.zeros(shape)
-        img[self.points[:,0], self.points[:,1]] = 1
-        return img
-
     def get_center(self, mean_f=np.mean, ref_point=None, max_diff=0.01):
         mean_point = mean_f(self.points, axis=0)
         if ref_point is None:

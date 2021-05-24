@@ -7,6 +7,7 @@ from collections import defaultdict
 import random
 import pandas as pd
 import matplotlib.pylab as plt
+from matplotlib.colors import LinearSegmentedColormap
 import json
 import os
 
@@ -135,7 +136,11 @@ class CalibrateColors(Learn):
         mean_colors = []
         for index in np.unique(self.data['job_index']):
             indices = np.asarray(self.data['job_index'])==index
-            mean_colors.append(np.mean(np.asarray(self.data['colors'])[indices], axis=0))
+            mean_colors.append(np.average(
+                np.asarray(self.data['colors'])[indices],
+                axis=0,
+                weights=np.asarray(self.data['counts'])[indices]
+            ))
         return np.array(mean_colors)[np.array(self.data['job_index'])]
 
     def save_data(self, file_name):
@@ -165,11 +170,12 @@ class CalibrateColors(Learn):
         _, ax = plt.subplots(1, 2, figsize=(14, 7))
         ax[0].imshow(np.mean(self.current_img, axis=-1), cmap='Greys')
         l = self.data['unique_labels'][self.current_index]
-        ax[0].scatter(
-            self.current_positions[self.current_labels==l, 1],
-            self.current_positions[self.current_labels==l, 0],
-            marker='.', s=0.1, color='red'
-        )
+        n_bin = 2
+        colors = ([1, 0, 0], [1, 0, 0])
+        cmap = LinearSegmentedColormap.from_list('scar', colors, N=n_bin)
+        canvas = np.full(self.current_img.shape[:-1], fill_value=np.nan)
+        canvas[tuple(self.current_positions[self.current_labels==l].T)] = 1
+        ax[0].imshow(canvas, cmap=cmap)
         ax[1].imshow(self.current_img)
 
     def get_coeff(self, key):
