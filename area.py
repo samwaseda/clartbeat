@@ -36,6 +36,8 @@ class Area:
     @property
     def tree(self):
         if self._tree is None:
+            if len(self)==0:
+                return None
             self._tree = cKDTree(self.points)
         return self._tree
 

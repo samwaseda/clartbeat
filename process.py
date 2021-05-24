@@ -347,6 +347,8 @@ class ProcessImage:
         return self.white_area.get_all_positions('left')
 
     def _get_rl_contact_counts(self, tree, r_max, contact_interval, tag='unknown'):
+        if tree is None:
+            return 0
         indices, values = self._get_contact_counts(tree=tree, r_max=r_max, tag=tag)
         return self.white_area.fill(
             get_slope(values, contact_interval), indices, filler=1.0, tag=tag
@@ -470,21 +472,22 @@ class ProcessImage:
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
         return np.array(x_mean_lst)
 
-    def _get_white_area(self, eps=3, min_samples=5, size=6, **kwargs):
-        area = self.apply_filter(ndimage.minimum_filter, size=size)
-        area = np.stack(np.where(area), axis=-1)
-        labels = DBSCAN(eps=eps, min_samples=min_samples).fit(area).labels_
-        tree = cKDTree(data=area)
-        x = np.stack(np.where(self.apply_filter(ndimage.median_filter, size=size)), axis=-1)
-        dist, indices = tree.query(x, p=np.inf, distance_upper_bound=size)
-        indices, x = (xxx[dist<size] for xxx in (indices, x))
-        cond = labels[indices]!=-1
-        return WhiteArea(x[cond], labels[indices[cond]])
+    def _get_white_area(self, eps=1, min_samples=5, size=5, **kwargs):
+        x = self.apply_filter(ndimage.minimum_filter, size=size)
+        tree = cKDTree(data=x)
+        x = self.apply_filter(ndimage.median_filter, size=size)
+        dist = tree.query(x, p=np.inf, distance_upper_bound=size)[0]
+        x_core = x[dist<size]
+        tree = cKDTree(data=x)
+        labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
+        labels = labels[tree.query(x_core)[1]]
+        cond = labels!=-1
+        return WhiteArea(x_core[cond], labels[cond])
 
     def apply_filter(self, filter_to_apply, size):
         area = self.get_image(mean=True)
         area = filter_to_apply(area, size=size)
-        return area*self.total_area > self.white_color_threshold
+        return np.stack(np.where(area*self.total_area > self.white_color_threshold), axis=-1)
 
     @property
     def white_area(self):
