@@ -339,7 +339,7 @@ class ProcessImage:
         if not self._left_lumen_exists(size, distances, dist_interval, fraction_interval):
             return None
         x = self._get_radial_mean_value()
-        indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)/size)
+        indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)**2/size)
         # if max_dist > 0:
         #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
         indices = np.unique(indices)
@@ -484,8 +484,9 @@ class ProcessImage:
         cond = labels!=-1
         return WhiteArea(x_core[cond], labels[cond])
 
-    def apply_filter(self, filter_to_apply, size):
-        area = self.get_image(mean=True)
+    def apply_filter(self, filter_to_apply, size, area=None):
+        if area is None:
+            area = self.get_image(mean=True)
         area = filter_to_apply(area, size=size)
         return np.stack(np.where(area*self.total_area > self.white_color_threshold), axis=-1)
 
