@@ -93,6 +93,7 @@ class ProcessImage:
         labels = DBSCAN(eps=eps_areas).fit(self.canny_edge_all).labels_
         unique_labels, counts = np.unique(labels, return_counts=True)
         large_enough = large_chunk(labels, min_fraction=min_fraction)
+        hull = ConvexHull(self.canny_edge_all[large_enough])
         return self.canny_edge_all[
             find_common_labels(labels[large_enough][hull.vertices], labels)
         ]
@@ -269,43 +270,35 @@ class ProcessImage:
         phi *= bias[1]
         return np.stack((r*np.cos(phi), r*np.sin(phi)), axis=-1)
 
-    def _find_neighbors(
-        self,
-        max_dist,
-        indices,
-        indices_to_avoid=None,
-        bias=None,
-        max_angle=45/180*np.pi,
-        recursion=0
-    ):
-        x = np.concatenate([self.white_area[ind] for ind in indices])
-        #if max_angle is not None and self._get_max_angle(x) > max_angle:
-        #    return indices
-        if bias is not None: 
-            x = self._get_biased_coordinates(x, bias)
-        tree = cKDTree(x)
-        for ii,xx in enumerate(self.white_area):
-            if ii in indices:
-                continue
+    def _get_relative_coordinates(self, x, theta_0=0):
+        xx = self.ref_job.heart.pca.get_relative_points(x)
+        theta = np.arctan2(*xx.T)
+        theta -= theta_0
+        theta -= np.rint(theta*0.5/np.pi)*2*np.pi
+        r = np.linalg.norm(xx, axis=-1)
+        return np.stack((r, theta), axis=-1)
+
+    def _polar_to_cartesian(self, rt):
+        return self.ref_job.heart.pca.get_absolute_points(
+            np.stack(rt[:,0]*np.array([np.cos(rt[:,1]), np.sin(rt[:,1])]), axis=-1)
+        )
+
+    def _find_neighbors(self, key, bias=None, max_dist=20, min_counts=1):
+        x_current = self.white_area.get_all_positions(key)
+        if bias is not None:
+            theta_0 = np.mean(self._get_relative_coordinates(x_current)[:,1])
+            rt_l = self._get_relative_coordinates(x_current, theta_0)
+            x_current = self._polar_to_cartesian(rt_l*bias)
+        tree = cKDTree(x_current)
+        for ii,x in zip(
+            self.white_area.get_indices('unknown', unique=True), self.white_area.get_positions()
+        ):
             if bias is not None:
-                xx = self._get_biased_coordinates(xx, bias)
-            # if tree.query(xx)[0].min()>max_dist:
-            if indices_to_avoid is not None and ii in indices_to_avoid:
-                continue
-            min_size = max_dist*(2*np.sqrt(np.pi*len(xx))-np.pi*max_dist)
-            if tree.count_neighbors(cKDTree(xx), max_dist) < min_size:
-                continue
-            indices.append(ii) 
-            if recursion > len(indices):
-                return self._find_neighbors(
-                    max_dist=max_dist,
-                    indices=indices,
-                    indices_to_avoid=indices_to_avoid,
-                    bias=bias,
-                    max_angle=max_angle,
-                    recursion=recursion
-                )
-        return indices
+                x = self._polar_to_cartesian(self._get_relative_coordinates(x, theta_0)*bias)
+            counts = tree.count_neighbors(cKDTree(x), r=max_dist)/max_dist**3
+            if counts > min_counts:
+                self.white_area.tags[ii] = key
+                self._find_neighbors(key, bias=bias, max_dist=max_dist, min_counts=min_counts)
 
     @property
     def total_mean_radius(self):
@@ -318,12 +311,38 @@ class ProcessImage:
         dist_criterion = get_slope(dist/self.total_mean_radius, dist_interval)
         return np.any(fraction_criterion*dist_criterion > 0.5)
 
+    def _remove_excess(
+        self,
+        points,
+        eps=1.5,
+        size=0.05,
+        min_samples=5,
+        min_fraction=0.2,
+    ):
+        if size*eps==0:
+            return points
+        size = np.rint(np.sqrt(len(points))*size).astype(int)
+        area = self.get_canvas(points, fill_value=0)
+        x = np.stack(np.where(ndimage.minimum_filter(area, size=size)>0), axis=-1)
+        labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
+        tree = cKDTree(data=x)
+        dist, indices = tree.query(points, p=np.inf, distance_upper_bound=size)
+        x = points[dist<size]
+        indices = indices[dist<size]
+        labels = labels[indices]
+        return x[large_chunk(labels, min_fraction=min_fraction)]
+
     def get_left_lumen(
         self,
-        max_dist=5,
+        max_dist=20,
         dist_interval=None,
         fraction_interval=[0.001, 0.006],
         recursion=0,
+        min_counts=1,
+        eps_excess=1.5,
+        size_excess=0.05,
+        min_samples=5,
+        min_fraction=0.2
     ):
         if 'left' in self.white_area.tags:
             return self.white_area.get_all_positions('left')
@@ -337,11 +356,18 @@ class ProcessImage:
             return None
         x = self._get_radial_mean_value()
         indices = np.argmin(np.linalg.norm(x-heart_center, axis=-1)**2/size)
-        # if max_dist > 0:
-        #     indices = self._find_neighbors(max_dist, indices, max_angle=None)
         indices = np.unique(indices)
         self.white_area[indices] = 'left'
-        return self.white_area.get_all_positions('left')
+        if max_dist > 0:
+            self._find_neighbors('left', max_dist=max_dist, min_counts=min_counts)
+        x = self.white_area.get_all_positions('left')
+        return self._remove_excess(
+            x,
+            eps=eps_excess,
+            size=size_excess,
+            min_samples=min_samples,
+            min_fraction=min_fraction
+        )
 
     def _get_rl_contact_counts(self, tree, r_max, contact_interval, tag='unknown'):
         if tree is None:
@@ -422,8 +448,9 @@ class ProcessImage:
 
     def get_right_lumen(
         self,
-        max_dist=5,
-        bias=[1.5, 0.2],
+        max_dist=20,
+        bias=[1.0, 0.2],
+        min_counts=1,
         dist_interval=None,
         recursion=0,
         r_perimeter=3,
@@ -432,7 +459,11 @@ class ProcessImage:
         curvature_sigmas=[20, 30],
         curvature_sigma_interval=[0.08, 0.12],
         curvature_interval=[0.002, -0.002],
-        min_weight=0.002
+        min_weight=0.002,
+        eps_excess=1.5,
+        size_excess=0.05,
+        min_samples=5,
+        min_fraction=0.2
     ):
         if 'right' in self.white_area.tags:
             return self.white_area.get_all_positions('right')
@@ -449,15 +480,22 @@ class ProcessImage:
         if weights.max() < min_weight:
             return None
         indices = np.argmax(weights)
-        # if max_dist > 0:
-        #     indices = self._find_neighbors(
-        #         max_dist,
-        #         indices,
-        #         bias=np.array(bias),
-        #         recursion=recursion
-        #     )
         self.white_area.tags[indices] = 'right'
-        return self.white_area.get_all_positions('right')
+        if max_dist > 0:
+            self._find_neighbors(
+                'right',
+                bias=bias,
+                max_dist=max_dist,
+                min_counts=min_counts,
+            )
+        x = self.white_area.get_all_positions('right')
+        return self._remove_excess(
+            x,
+            eps=eps_excess,
+            size=size_excess,
+            min_samples=min_samples,
+            min_fraction=min_fraction
+        )
 
     def _get_radial_mean_value(self, center=None, tag='unknown'):
         if center is None:
@@ -469,13 +507,16 @@ class ProcessImage:
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
         return np.array(x_mean_lst)
 
-    def _get_white_area(self, eps=1, min_samples=5, size=5, **kwargs):
-        tree = cKDTree(data=self.apply_filter(ndimage.minimum_filter, size=size))
+    def _get_white_area(self, eps=1, min_samples=5, size=5, max_regroup_fraction=0.1, **kwargs):
+        x_min = self.apply_filter(ndimage.minimum_filter, size=size)
+        tree = cKDTree(data=x_min)
+        labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x_min)
         x = self.apply_filter(ndimage.median_filter, size=size)
         dist = tree.query(x, p=np.inf, distance_upper_bound=size)[0]
         x_core = x[dist<size]
-        tree = cKDTree(data=x)
-        labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
+        if len(large_chunk(labels, max_regroup_fraction))==1:
+            tree = cKDTree(data=x)
+            labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
         labels = labels[tree.query(x_core)[1]]
         cond = labels!=-1
         return WhiteArea(x_core[cond], labels[cond])

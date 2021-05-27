@@ -54,13 +54,15 @@
             "apply_filter": true
         },
         "left": {
-            "max_dist": 5,
+            "max_dist": 10,
             "dist_interval": [0.6, 0.4],
-            "fraction_interval": [0.001, 0.006]
+            "fraction_interval": [0.001, 0.006],
+            "min_counts": 1
         },
         "right": {
-            "max_dist": 5,
-            "bias": [1.5, 0.2],
+            "max_dist": 10,
+            "min_counts": 1,
+            "bias": [1.0, 0.2],
             "recursion": 5,
             "r_perimeter": 3,
             "r_left": 5,
@@ -68,7 +70,11 @@
             "curvature_sigmas": [20, 30],
             "curvature_sigma_interval": [0.08, 0.12],
             "curvature_interval": [0.002, -0.002],
-            "min_weight": 0.002
+            "min_weight": 0.002,
+            "eps_excess": 1.5,
+            "size_excess": 0.05,
+            "min_samples": 5,
+            "min_fraction": 0.2
         }
     },
     "tissue": {
