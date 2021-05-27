@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import damp, get_slope, MyPCA, find_common_labels, get_softplus
+from tools import damp, get_slope, MyPCA, find_common_labels, get_softplus, large_chunk
 from surface import Surface
 
 class ProcessImage:
@@ -92,10 +92,7 @@ class ProcessImage:
     def _get_main_edges(self, eps_areas=5, min_fraction=0.2):
         labels = DBSCAN(eps=eps_areas).fit(self.canny_edge_all).labels_
         unique_labels, counts = np.unique(labels, return_counts=True)
-        large_enough = find_common_labels(
-            unique_labels[counts/counts[unique_labels!=-1].max() > min_fraction], labels
-        )
-        hull = ConvexHull(self.canny_edge_all[large_enough])
+        large_enough = large_chunk(labels, min_fraction=min_fraction)
         return self.canny_edge_all[
             find_common_labels(labels[large_enough][hull.vertices], labels)
         ]
@@ -473,8 +470,7 @@ class ProcessImage:
         return np.array(x_mean_lst)
 
     def _get_white_area(self, eps=1, min_samples=5, size=5, **kwargs):
-        x = self.apply_filter(ndimage.minimum_filter, size=size)
-        tree = cKDTree(data=x)
+        tree = cKDTree(data=self.apply_filter(ndimage.minimum_filter, size=size))
         x = self.apply_filter(ndimage.median_filter, size=size)
         dist = tree.query(x, p=np.inf, distance_upper_bound=size)[0]
         x_core = x[dist<size]
@@ -484,10 +480,8 @@ class ProcessImage:
         cond = labels!=-1
         return WhiteArea(x_core[cond], labels[cond])
 
-    def apply_filter(self, filter_to_apply, size, area=None):
-        if area is None:
-            area = self.get_image(mean=True)
-        area = filter_to_apply(area, size=size)
+    def apply_filter(self, filter_to_apply, size):
+        area = filter_to_apply(self.get_image(mean=True), size=size)
         return np.stack(np.where(area*self.total_area > self.white_color_threshold), axis=-1)
 
     @property

@@ -59,3 +59,12 @@ def find_common_labels(unique_labels, labels):
         np.unique(unique_labels).reshape(-1, 1)
     ).query(labels.reshape(-1, 1))
     return dist == 0
+
+def large_chunk(labels, min_fraction, keep_noise=False, f=np.max):
+    unique_labels, counts = np.unique(labels, return_counts=True)
+    if not keep_noise:
+        counts = counts[unique_labels!=-1]
+        unique_labels = unique_labels[unique_labels!=-1]
+    unique_labels = unique_labels[counts > min_fraction*f(counts)]
+    return find_common_labels(unique_labels, labels)
+
