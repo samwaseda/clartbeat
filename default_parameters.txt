@@ -45,19 +45,24 @@
         },
         "stich_high_angles": {
             "sigma": 5,
-            "max_angle": 16.2
+            "max_angle": 16.2,
+            "max_angle_diff": 100
         },
         "white": {
             "eps": 1,
             "min_samples": 5,
             "size": 6,
-            "apply_filter": true
+            "max_regroup_fraction": 0.1
         },
         "left": {
             "max_dist": 10,
             "dist_interval": [0.6, 0.4],
             "fraction_interval": [0.001, 0.006],
-            "min_counts": 1
+            "min_counts": 1,
+            "eps_excess": 1.5,
+            "size_excess": 0.05,
+            "min_samples": 5,
+            "min_fraction": 0.1
         },
         "right": {
             "max_dist": 10,
@@ -67,14 +72,14 @@
             "r_perimeter": 3,
             "r_left": 5,
             "contact_interval": [0.3, 0.0],
-            "curvature_sigmas": [20, 30],
-            "curvature_sigma_interval": [0.08, 0.12],
+            "curvature_sigmas": [20, 35],
+            "curvature_sigma_interval": [0.08, 0.15],
             "curvature_interval": [0.002, -0.002],
-            "min_weight": 0.002,
+            "min_weight": 0.0017,
             "eps_excess": 1.5,
             "size_excess": 0.05,
             "min_samples": 5,
-            "min_fraction": 0.2
+            "min_fraction": 0.1
         }
     },
     "tissue": {

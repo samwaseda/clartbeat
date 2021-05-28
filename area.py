@@ -49,8 +49,9 @@ class Area:
     def delaunay(self):
         if self._delaunay is None:
             if self.points is None or len(self)==0:
-                self._delaunnay = Surface(None)
-            self._delaunay = Surface(self.points[self.get_delaunay_vertices()])
+                self._delaunay = Surface([])
+            else:
+                self._delaunay = Surface(self.points[self.get_delaunay_vertices()])
         return self._delaunay
 
     @property
@@ -194,7 +195,11 @@ class Area:
 
     @value_or_zero
     def count_neighbors(self, points, r=2):
+        if len(self) == 0:
+            return 0
         if not isinstance(points, cKDTree):
+            if len(points) == 0:
+                return 0
             points = cKDTree(points)
         return self.tree.count_neighbors(points, r=r)/r**2
 

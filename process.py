@@ -161,20 +161,24 @@ class ProcessImage:
         self,
         sigma=5,
         max_angle=16.2,
+        max_angle_diff=100,
     ):
         total_number = len(self.canny_edge_perimeter.x)
         high_angles = -self.canny_edge_perimeter.get_curvature(sigma=sigma)>max_angle
         high_angles = np.arange(len(high_angles))[high_angles]
         if len(high_angles)<2:
             return
-        cluster = AgglomerativeClustering(
+        labels = AgglomerativeClustering(
             n_clusters=None, distance_threshold=1.1, linkage='single'
-        ).fit(high_angles.reshape(-1, 1))
+        ).fit_predict(high_angles.reshape(-1, 1))
         indices = np.sort([
-            np.rint(high_angles[cluster.labels_==l].mean()).astype(int)
-            for l in np.unique(cluster.labels_)
+            np.rint(high_angles[labels==l].mean()).astype(int)
+            for l in np.unique(labels)
         ])
         if len(indices)!=2:
+            return
+        d = np.diff(indices)[0]
+        if np.absolute(d-np.rint(d/total_number)*total_number) > max_angle_diff:
             return
         if np.diff(indices)[0]>0.5*total_number:
             indices = np.roll(indices, 1)
@@ -405,8 +409,8 @@ class ProcessImage:
 
     def _get_rl_curvature(
         self,
-        sigmas=[20, 30],
-        sigma_interval=[0.08, 0.12],
+        sigmas=[20, 35],
+        sigma_interval=[0.08, 0.15],
         curvature_interval=[0.002, -0.002],
         tag='unknown'
     ):
@@ -459,7 +463,7 @@ class ProcessImage:
         curvature_sigmas=[20, 30],
         curvature_sigma_interval=[0.08, 0.12],
         curvature_interval=[0.002, -0.002],
-        min_weight=0.002,
+        min_weight=0.0017,
         eps_excess=1.5,
         size_excess=0.05,
         min_samples=5,
@@ -507,14 +511,14 @@ class ProcessImage:
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
         return np.array(x_mean_lst)
 
-    def _get_white_area(self, eps=1, min_samples=5, size=5, max_regroup_fraction=0.1, **kwargs):
+    def _get_white_area(self, eps=1, min_samples=5, size=6, max_regroup_fraction=0.1):
         x_min = self.apply_filter(ndimage.minimum_filter, size=size)
         tree = cKDTree(data=x_min)
         labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x_min)
         x = self.apply_filter(ndimage.median_filter, size=size)
         dist = tree.query(x, p=np.inf, distance_upper_bound=size)[0]
         x_core = x[dist<size]
-        if len(large_chunk(labels, max_regroup_fraction))==1:
+        if len(np.unique(labels[large_chunk(labels, max_regroup_fraction)]))==1:
             tree = cKDTree(data=x)
             labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
         labels = labels[tree.query(x_core)[1]]

@@ -96,21 +96,27 @@ class Analyse:
         output['RL_contact_with_perimeter'] = self.right.count_neighbors(
             self.heart.perimeter.x, r=2
         )*r
-        output['RV_area_wo_cracks'] = np.sum(
-            self.left_ventricle.separate_points(self.tissue.positions)
-        )*rr
-        output['RV_area'] = np.sum(self.left_ventricle.separate_points(self.heart.points))*rr
-        output['area_total_white_clusters'] = np.sum(
-            [len(c) for c in self.image.white_area]
-        )*rr
-        output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
-            self.heart.get_center(), self.right.get_center()
-        )-2*np.pi
+        if self.left_ventricle is not None:
+            output['RV_area_wo_cracks'] = np.sum(
+                self.left_ventricle.separate_points(self.tissue.positions)
+            )*rr
+            output['RV_area'] = np.sum(self.left_ventricle.separate_points(self.heart.points))*rr
+            output['distance_left_to_right_lumen'] = np.linalg.norm(
+                self.left_ventricle.left_to_right
+            )*r
+        else:
+            output['RV_area_wo_cracks'] = 0
+            output['RV_area'] = 0
+            output['distance_left_to_right_lumen'] = 0
+        output['area_total_white_clusters'] = len(self.image.white_area.x)*rr
+        if len(self.right) > 0:
+            output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
+                self.heart.get_center(), self.right.get_center()
+            )-2*np.pi
+        else:
+            output['curvature_crossing'] = 0
         output['curvature_ptp'] = self.heart.perimeter.get_curvature(sigma=5).ptp()
         output['curvature_std'] = np.std(self.heart.perimeter.get_curvature(sigma=5))
-        output['distance_left_to_right_lumen'] = np.linalg.norm(
-            self.left_ventricle.left_to_right
-        )*r
         output['scar_total'] = np.sum(self.tissue.get_distance()<0)*rr
         output['scar_err'] = self.tissue.get_error()*rr
         return output
