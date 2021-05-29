@@ -75,7 +75,7 @@ class ProcessImage:
                 self.resolution = (self.parameters['resolution']*self._reduction)**2
         if reduction is None:
             reduction = self._reduction
-        return img[::reduction,::reduction]
+        return get_reduced_mean(img, reduction)
 
     @property
     def non_white_points(self):
@@ -640,6 +640,14 @@ class WhiteArea:
 
     def __setitem__(self, index, tag):
         self.tags[np.where(self.tags=='unknown')[0][index]] = tag
+
+def get_reduced_mean(img, reduction):
+    size = np.array(img.shape[:2])
+    new_size = reduction*np.floor(size/reduction).astype(int)
+    img = img[:new_size[0], :new_size[1]]
+    img = img.reshape(int(new_size[0]/reduction), reduction, int(new_size[1]/reduction), reduction, 3)
+    img = np.mean(img, axis=(1,3))
+    return np.rint(img).astype(int)
 
 def get_minim_white(img, x_min=400, sigma=4):
     for _ in range(10):
