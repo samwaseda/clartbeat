@@ -1,1 +1,1 @@
-This software is not going to be updated anymore. Do not waste your time on this page.
+This software is going to be neither used nor updated anymore. Do not waste your time on this page.
