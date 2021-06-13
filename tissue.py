@@ -42,19 +42,9 @@ class Tissue:
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
         self.positions = self._remove_white(total_area.copy(), sigmas, white_areas)
-        if fill_white:
-            self.img = self._fill_white()
         self.img = self.get_median_filter(size=filter_size)
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
-
-    def _fill_white(self):
-        mean_color = np.mean(self.img[self.positions[:,0], self.positions[:,1]], axis=0)
-        img = np.ones_like(self.img)*mean_color
-        img[self.positions[:,0], self.positions[:,1]] = self.img[
-            self.positions[:,0], self.positions[:,1]
-        ]
-        return img
 
     def get_median_filter(self, size=6):
         if size > 0:
