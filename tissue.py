@@ -7,7 +7,7 @@ from tools import get_slope
 class Tissue:
     def __init__(
         self,
-        img,
+        ref_job,
         total_area,
         white_areas=None,
         scar_coeff=np.array([
@@ -37,7 +37,8 @@ class Tissue:
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])
         self.all_labels = None
         self.fibrous_tissue_cluster = None
-        self.img = img.copy()
+        self.ref_job = ref_job
+        self.img = self.ref_job.get_image()
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
         self.positions = self._remove_white(total_area.copy(), sigmas, white_areas)
@@ -46,15 +47,6 @@ class Tissue:
         self.img = self.get_median_filter(size=filter_size)
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
-
-    @property
-    def _has_colors(self):
-        return len(self.img.shape)==3
-
-    def _get_brightness(self, color):
-        if self._has_colors:
-            return np.mean(color, axis=-1)
-        return color
 
     def _fill_white(self):
         mean_color = np.mean(self.img[self.positions[:,0], self.positions[:,1]], axis=0)
@@ -73,10 +65,7 @@ class Tissue:
                 distance_upper_bound=size
             )
             positions = self.positions[indices[distances<np.inf]]
-            if self._has_colors:
-                rgb = np.empty(distances.shape+(3,))
-            else:
-                rgb = np.empty(distances.shape)
+            rgb = np.empty(distances.shape+(3,))
             rgb[:] = np.nan
             rgb[distances<np.inf] = self.img[positions[:,0], positions[:,1]]
             rgb = np.nanmedian(rgb, axis=1)
@@ -85,8 +74,7 @@ class Tissue:
 
     def _remove_white(self, total_area, sigmas=None, white_areas=None, ridge_threshold=0.5):
         if sigmas is not None:
-            img = self._get_brightness(self.img.copy())
-            img_white = frangi(img, sigmas=sigmas, black_ridges=False)
+            img_white = frangi(self.img.mean(axis=-1), sigmas=sigmas, black_ridges=False)
             total_area[img_white>ridge_threshold] = False
         if white_areas is not None:
             total_area[white_areas.x[:,0], white_areas.x[:,1]] = False
