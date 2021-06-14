@@ -68,3 +68,11 @@ def large_chunk(labels, min_fraction, keep_noise=False, f=np.max):
     unique_labels = unique_labels[counts > min_fraction*f(counts)]
     return find_common_labels(unique_labels, labels)
 
+def get_extrema(values, maximum=True):
+    if maximum:
+        cond = values > np.max([np.roll(values, 1), np.roll(values, -1)], axis=0)
+    else:
+        cond = values < np.min([np.roll(values, 1), np.roll(values, -1)], axis=0)
+    cond[[0,-1]] = False
+    return cond
+

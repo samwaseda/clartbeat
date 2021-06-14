@@ -8,8 +8,6 @@ class Tissue:
     def __init__(
         self,
         ref_job,
-        total_area,
-        white_areas=None,
         scar_coeff=np.array([
             46.52921906,
             3.23609218,
@@ -28,7 +26,8 @@ class Tissue:
             -163.16110443,
             -26.80759178
         ]),
-        sigmas=[4],
+        frangi_sigmas=[4],
+        frangi_threshold=0.5,
         color_enhancement=10,
         filter_size=6,
         fill_white=False,
@@ -38,13 +37,28 @@ class Tissue:
         self.all_labels = None
         self.fibrous_tissue_cluster = None
         self.ref_job = ref_job
-        self.img = self.ref_job.get_image()
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
-        self.positions = self._remove_white(total_area.copy(), sigmas, white_areas)
+        self.img = self.ref_job.get_image()
+        self.frangi_sigmas = frangi_sigmas
+        self.frangi_threshold = frangi_threshold
+        self._positions = None
         self.img = self.get_median_filter(size=filter_size)
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
+
+    @property
+    def positions(self):
+        if self._positions is None:
+            img_bw = self.ref_job.get_image(mean=True)
+            total_area = self.ref_job.image.total_area.copy()
+            if self.frangi_sigmas is not None:
+                img_white = frangi(img_bw, sigmas=self.frangi_sigmas, black_ridges=False)
+                frangi_cond = img_white > self.frangi_threshold
+                total_area[frangi_cond] = False
+            total_area[tuple(self.ref_job.image.white_area.x.T)] = False
+            self._positions = np.stack(np.where(total_area), axis=-1)
+        return self._positions
 
     def get_median_filter(self, size=6):
         if size > 0:
@@ -61,14 +75,6 @@ class Tissue:
             rgb = np.nanmedian(rgb, axis=1)
             self.img[self.positions[:,0], self.positions[:,1]] = rgb
         return self.img
-
-    def _remove_white(self, total_area, sigmas=None, white_areas=None, ridge_threshold=0.5):
-        if sigmas is not None:
-            img_white = frangi(self.img.mean(axis=-1), sigmas=sigmas, black_ridges=False)
-            total_area[img_white>ridge_threshold] = False
-        if white_areas is not None:
-            total_area[white_areas.x[:,0], white_areas.x[:,1]] = False
-        return np.stack(np.where(total_area), axis=-1)
 
     def _get_zones(self, name):
         return np.where(self._names==name)[0][0]

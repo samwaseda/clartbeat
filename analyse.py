@@ -51,8 +51,6 @@ class Analyse:
         if self._tissue is None:
             self._tissue = Tissue(
                 ref_job=self,
-                total_area=self.image.total_area,
-                white_areas=self.image.white_area,
                 **self.parameters['tissue']
             )
         return self._tissue

@@ -92,9 +92,10 @@
             -67.36322315,
             7.34293991
         ],
-        "sigmas": [
+        "frangi_sigmas": [
             4
         ],
+	"frangi_threshold": 0.5,
         "color_enhancement": 10,
         "filter_size": 6,
         "fill_white": false

@@ -254,11 +254,14 @@ class ProcessImage:
             return np.mean(self.img, axis=-1)
         return self.img.copy()
 
+    @property
+    def non_white_area(self):
+        return self.get_image(mean=True) < self.white_color_threshold
+
     def get_base_color(self, mean=True):
-        mean_color = np.mean(self.img, axis=-1)
         if mean:
-            return np.mean(self.img[mean_color<self.white_color_threshold])
-        return np.mean(self.img[mean_color<self.white_color_threshold], axis=0)
+            return np.mean(self.img[self.non_white_area])
+        return np.mean(self.img[self.non_white_area], axis=0)
 
     def _get_max_angle(self, x):
         center = np.stack(np.where(self.total_area), axis=-1).mean(axis=0)
