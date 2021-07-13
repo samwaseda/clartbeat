@@ -28,9 +28,7 @@ class Tissue:
         ]),
         frangi_sigmas=[4],
         frangi_threshold=0.5,
-        color_enhancement=10,
         filter_size=6,
-        fill_white=False,
     ):
         self._data = {}
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])

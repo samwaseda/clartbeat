@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import damp, get_slope, MyPCA, find_common_labels, get_softplus, large_chunk
+from tools import *
 from surface import Surface
 
 class ProcessImage:
@@ -663,18 +663,15 @@ def get_minim_white(img, x_min=400, sigma=4):
         x_min -= dhdx/np.absolute(ddhddx)
     return x_min
 
-def get_white_color_threshold(img, bins=100, min_value=175, value=None, **args):
-    if value is not None:
-        return value
-    norm = img
-    if len(norm.shape)==3 and norm.shape[-1]==3:
-        norm = np.mean(img, axis=-1)
-    if len(norm.shape)!=2:
-        raise ValueError('invalid norm shape')
-    v = np.rint(np.mean(img, axis=-1))
-    v = v[v>min_value]
-    l, c = np.unique(v, return_counts=True)
-    return l[c.argmin()]
+def get_white_color_threshold(img, bins=1000, sigma=3):
+    x_range = np.linspace(0, 255, bins)
+    values, counts = np.unique(np.rint(img.mean(axis=-1).flatten()), return_counts=True)
+    gaussian = np.sum(
+        np.log10(counts)/np.sqrt(sigma)*np.exp(-(values-x_range[:,None])**2/(2*sigma**2)),
+        axis=1
+    )
+    max_lim = np.where(get_extrema(gaussian, True))[0][-1]
+    return x_range[np.where(get_extrema(gaussian, False)[:max_lim])[0][-1]]
 
 def cleanse_edge(img, erase_edge=10):
     img_new = img.copy()

@@ -73,7 +73,7 @@ class Analyse:
         rr = self.image.resolution
         r = np.sqrt(rr)
         output = {
-            'file_name': self.image.file_name.split('/')[-1],
+            'file_name': '/'.join(self.image.file_name.split('/')[-2:]),
             'resolution': rr,
             'white_color_threshold': self.image.white_color_threshold,
             'H_area_elastic_net': self.heart.perimeter.volume*rr,
