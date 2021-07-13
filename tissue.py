@@ -37,28 +37,48 @@ class Tissue:
         self.ref_job = ref_job
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
-        self.img = self.ref_job.get_image()
         self.frangi_sigmas = frangi_sigmas
+        self.filter_size = filter_size
         self.frangi_threshold = frangi_threshold
         self._positions = None
-        self.img = self.get_median_filter(size=filter_size)
+        self._img = None
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
+
+    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.5):
+        img_bw = self.ref_job.get_image(mean=True)
+        if reverse_color:
+            img_bw -= self.ref_job.get_base_color()
+            img_bw = np.absolute(img_bw)
+            img_bw *= 255/img_bw.max()
+        img_white = frangi(img_bw, sigmas=sigmas, black_ridges=False)
+        return img_white > threshold
 
     @property
     def positions(self):
         if self._positions is None:
-            img_bw = self.ref_job.get_image(mean=True)
             total_area = self.ref_job.image.total_area.copy()
             if self.frangi_sigmas is not None:
-                img_white = frangi(img_bw, sigmas=self.frangi_sigmas, black_ridges=False)
-                frangi_cond = img_white > self.frangi_threshold
+                frangi_cond = self._get_frangi_cond(
+                    reverse_color=True,
+                    sigmas=self.frangi_sigmas,
+                    black_ridge=False,
+                    threshold=self.frangi_threshold
+                )
                 total_area[frangi_cond] = False
             total_area[tuple(self.ref_job.image.white_area.x.T)] = False
             self._positions = np.stack(np.where(total_area), axis=-1)
         return self._positions
 
+    @property
+    def img(self):
+        if self._img is None:
+            self._img = self.ref_job.get_image()
+            self._img = self.get_median_filter(size=self.filter_size)
+        return self._img
+
     def get_median_filter(self, size=6):
+        img = self._img.copy()
         if size > 0:
             tree = cKDTree(self.positions)
             distances, indices = tree.query(
@@ -69,10 +89,10 @@ class Tissue:
             positions = self.positions[indices[distances<np.inf]]
             rgb = np.empty(distances.shape+(3,))
             rgb[:] = np.nan
-            rgb[distances<np.inf] = self.img[positions[:,0], positions[:,1]]
+            rgb[distances<np.inf] = img[positions[:,0], positions[:,1]]
             rgb = np.nanmedian(rgb, axis=1)
-            self.img[self.positions[:,0], self.positions[:,1]] = rgb
-        return self.img
+            img[self.positions[:,0], self.positions[:,1]] = rgb
+        return img
 
     def _get_zones(self, name):
         return np.where(self._names==name)[0][0]
