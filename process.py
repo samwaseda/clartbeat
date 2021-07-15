@@ -258,10 +258,20 @@ class ProcessImage:
     def non_white_area(self):
         return self.get_image(mean=True) < self.white_color_threshold
 
-    def get_base_color(self, mean=True):
+    @staticmethod
+    def _find_maximum(indices, sigma=10, n_items=256):
+        count = np.zeros(n_items)
+        np.add.at(count, indices, 1)
+        count = ndimage.gaussian_filter(count, sigma)
+        return count.argmax()
+
+    def get_base_color(self, mean=True, sigma=10):
         if mean:
-            return np.mean(self.img[self.non_white_area])
-        return np.mean(self.img[self.non_white_area], axis=0)
+            return self._find_maximum(self.img[self.non_white_area].flatten(), sigma=sigma)
+        return [self._find_maximum(
+                np.rint(self.img[self.non_white_area]).astype(int).reshape(-1,3)[:,i],
+                sigma=sigma,
+            ) for i in range(3)]
 
     def _get_max_angle(self, x):
         center = np.stack(np.where(self.total_area), axis=-1).mean(axis=0)
