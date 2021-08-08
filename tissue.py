@@ -45,10 +45,10 @@ class Tissue:
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
 
-    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.5):
+    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.75):
         img_bw = self.ref_job.get_image(mean=True)
         if reverse_color:
-            img_bw -= self.ref_job.get_base_color()
+            img_bw -= self.ref_job.image.get_base_color()
             img_bw = np.absolute(img_bw)
             img_bw *= 255/img_bw.max()
         img_white = frangi(img_bw, sigmas=sigmas, black_ridges=False)

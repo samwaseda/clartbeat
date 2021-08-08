@@ -28,6 +28,7 @@ class ProcessImage:
         self._white_color_threshold = None
         self._total_area = None
         self._white_area = None
+        self._base_color = None
         self._stiched = False
         self.file_name = file_name
         self._img = None
@@ -76,10 +77,6 @@ class ProcessImage:
         if reduction is None:
             reduction = self._reduction
         return get_reduced_mean(img, reduction)
-
-    @property
-    def non_white_points(self):
-        return np.mean(self.load_image(), axis=-1) < self.white_color_threshold
 
     @property
     def canny_edge_all(self):
@@ -259,19 +256,36 @@ class ProcessImage:
         return self.get_image(mean=True) < self.white_color_threshold
 
     @staticmethod
-    def _find_maximum(indices, sigma=10, n_items=256):
+    def _find_maximum(indices, sigma=8, n_items=256, min_fraction=0.5):
         count = np.zeros(n_items)
         np.add.at(count, indices, 1)
         count = ndimage.gaussian_filter(count, sigma)
-        return count.argmax()
+        cond = np.where((count[1:-1]>count[:-2])*(count[1:-1]>count[2:]))[0]
+        if np.sum(cond)==0:
+            return count.argmax()
+        cond = cond[count[cond]/count[cond].max()>min_fraction]
+        return cond[0]
 
-    def get_base_color(self, mean=True, sigma=10):
+    def get_base_color(self, mean=True, sigma=6, min_fraction=0.5):
+        if self._base_color is None:
+            all_colors = self.get_image()[self.non_white_area]
+            unique_colors, counts = np.unique(all_colors, return_counts=True, axis=0)
+            field = np.zeros((256, 256, 256))
+            field[tuple(unique_colors.T)] = counts
+            field = ndimage.gaussian_filter(field, sigma=sigma)
+            cond = (field==ndimage.maximum_filter(field, size=sigma))*(field!=0)
+            colors = np.stack(np.where(cond)).T
+            colors = colors[field[cond]>min_fraction*field[cond].max()]
+            self._base_color = colors[np.std(colors, axis=-1).argmax()]
         if mean:
-            return self._find_maximum(self.img[self.non_white_area].flatten(), sigma=sigma)
-        return [self._find_maximum(
-                np.rint(self.img[self.non_white_area]).astype(int).reshape(-1,3)[:,i],
-                sigma=sigma,
-            ) for i in range(3)]
+            return np.mean(self._base_color)
+        return self._base_color
+
+    @property
+    def relative_distance_from_base_color(self):
+        img = self.get_image()-self.get_base_color(mean=False)
+        img = np.linalg.norm(img, axis=-1)
+        return img/img.max()
 
     def _get_max_angle(self, x):
         center = np.stack(np.where(self.total_area), axis=-1).mean(axis=0)

@@ -63,9 +63,6 @@ class Analyse:
             self._left_ventricle = LeftVentricle(self)
         return self._left_ventricle
 
-    def get_base_color(self, mean=True):
-        return self.image.get_base_color(mean=mean)
-
     def get_image(self, mean=False):
         return self.image.get_image(mean=mean)
 

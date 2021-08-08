@@ -94,7 +94,7 @@
         "frangi_sigmas": [
             4
         ],
-        "frangi_threshold": 0.5,
+        "frangi_threshold": 0.75,
         "filter_size": 6
     }
 }
