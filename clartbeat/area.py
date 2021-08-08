@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial import Delaunay, ConvexHull
 from sklearn.cluster import AgglomerativeClustering
 from tools import MyPCA
-from surface import Surface
+from clartbeat.surface import Surface
 from scipy.spatial import cKDTree
 
 def value_or_zero(func):

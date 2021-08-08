@@ -3,14 +3,14 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
-from area import Area
+from clartbeat.area import Area
 import matplotlib.pylab as plt
 from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
 from tools import *
-from surface import Surface
+from clartbeat.surface import Surface
 
 class ProcessImage:
     def __init__(

@@ -1,7 +1,7 @@
 from sklearn.linear_model import SGDClassifier
 import numpy as np
 from sklearn.mixture import GaussianMixture
-from learn import Learn
+from clartbeat.learn import Learn
 from scipy.spatial import cKDTree
 from collections import defaultdict
 import random

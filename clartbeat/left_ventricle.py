@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy import ndimage
-from surface import Surface
+from clartbeat.surface import Surface
 
 class LeftVentricle:
     def __init__(

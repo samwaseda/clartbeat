@@ -1,8 +1,8 @@
 import numpy as np
-from process import ProcessImage
-from tissue import Tissue
-from area import Area
-from left_ventricle import LeftVentricle
+from clartbeat.process import ProcessImage
+from clartbeat.tissue import Tissue
+from clartbeat.area import Area
+from clartbeat.left_ventricle import LeftVentricle
 import json
 
 class Analyse:
