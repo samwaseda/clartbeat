@@ -29,6 +29,14 @@
             "low": 6.157785258898054,
             "high": 7.670065207650683
         },
+        "frangi_ridges": {
+            "reverse_color": true,
+            "sigmas": [
+                2, 3, 4
+            ],
+            "black_ridges": false,
+            "threshold": 0.85
+        },
         "total_area": {
             "number_of_points": 360,
             "sigma": 0.05,
@@ -91,10 +99,6 @@
             -67.36322315,
             7.34293991
         ],
-        "frangi_sigmas": [
-            2, 3, 4
-        ],
-        "frangi_threshold": 0.85,
         "filter_size": 6
     }
 }

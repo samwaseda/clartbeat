@@ -1,7 +1,6 @@
 import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
-from skimage.filters import frangi
 from clartbeat.tools import get_slope
 
 class Tissue:
@@ -37,42 +36,16 @@ class Tissue:
         self.ref_job = ref_job
         self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
         self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
-        self.frangi_sigmas = frangi_sigmas
-        self.filter_size = filter_size
-        self.frangi_threshold = frangi_threshold
-        self._positions = None
         self._img = None
+        self._positions = None
+        self.filter_size = filter_size
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
-
-    @property
-    def _img_reverse_color(self):
-        img_bw = self.ref_job.get_image(mean=True)
-        img_bw -= self.ref_job.image.get_base_color()
-        img_bw = np.absolute(img_bw)
-        img_bw *= 255/img_bw.max()
-        return img_bw
-
-    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.75):
-        if reverse_color:
-            img_bw = self._img_reverse_color
-        else:
-            img_bw = self.ref_job.get_image(mean=True)
-        img_white = frangi(img_bw, sigmas=sigmas, black_ridges=False)
-        return img_white > threshold
 
     @property
     def positions(self):
         if self._positions is None:
             total_area = self.ref_job.image.total_area.copy()
-            if self.frangi_sigmas is not None:
-                frangi_cond = self._get_frangi_cond(
-                    reverse_color=True,
-                    sigmas=self.frangi_sigmas,
-                    black_ridge=False,
-                    threshold=self.frangi_threshold
-                )
-                total_area[frangi_cond] = False
             total_area[tuple(self.ref_job.image.white_area.x.T)] = False
             self._positions = np.stack(np.where(total_area), axis=-1)
         return self._positions

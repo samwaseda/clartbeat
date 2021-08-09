@@ -536,13 +536,34 @@ class ProcessImage:
             x_mean_lst.append(xx.mean(axis=0)/np.linalg.norm(xx.mean(axis=0))*r_mean+center)
         return np.array(x_mean_lst)
 
+    @property
+    def _img_reverse_color(self, v_max=255):
+        img_bw = self.get_image(mean=True)
+        img_bw -= self.get_base_color()
+        img_bw = np.absolute(img_bw)
+        img_bw *= v_max/img_bw.max()
+        return img_bw
+
+    def _get_frangi_ridges(
+        self, reverse_color=True, sigmas=[2, 3, 4], black_ridges=False, threshold=0.85
+    ):
+        if reverse_color:
+            img_bw = self._img_reverse_color
+        else:
+            img_bw = self.get_image(mean=True)
+        img_white = filters.frangi(img_bw, sigmas=sigmas, black_ridges=black_ridges)
+        return np.stack(np.where((img_white>threshold)*(~self.non_white_area)), axis=-1)
+
     def _get_white_area(self, eps=1, min_samples=5, size=6, max_regroup_fraction=0.1):
         x_min = self.apply_filter(ndimage.minimum_filter, size=size)
         tree = cKDTree(data=x_min)
         labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x_min)
         x = self.apply_filter(ndimage.median_filter, size=size)
         dist = tree.query(x, p=np.inf, distance_upper_bound=size)[0]
-        x_core = x[dist<size]
+        x_core = np.concatenate((
+            x[dist<size],
+            self._get_frangi_ridges(**self.parameters['frangi_ridges'])
+        ), axis=0)
         if len(np.unique(labels[large_chunk(labels, max_regroup_fraction)]))==1:
             tree = cKDTree(data=x)
             labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
