@@ -76,3 +76,6 @@ def get_extrema(values, maximum=True):
     cond[[0,-1]] = False
     return cond
 
+def abridge(condition, *args):
+    return (a[condition] for a in args)
+

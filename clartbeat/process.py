@@ -2,14 +2,13 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
 from sklearn.cluster import DBSCAN
-from sklearn.decomposition import PCA
 from clartbeat.area import Area
 import matplotlib.pylab as plt
 from scipy.spatial import ConvexHull
 from skimage import feature
 from skimage import filters
 from sklearn.cluster import AgglomerativeClustering
-from tools import *
+from clartbeat.tools import *
 from clartbeat.surface import Surface
 
 class ProcessImage:
@@ -106,7 +105,7 @@ class ProcessImage:
         p = self._get_main_edges(eps_areas=eps_areas, min_fraction=min_fraction).astype(float)
         mean = np.mean(p, axis=0)
         p -= mean
-        x_i = np.arctan2(p[:,1], p[:,0])
+        x_i = np.arctan2(*p.T[::-1])
         y_i = np.linalg.norm(p, axis=-1)
         x_i = np.concatenate((x_i-2*np.pi, x_i, x_i+2*np.pi))
         y_i = np.concatenate((y_i, y_i, y_i))
@@ -358,8 +357,7 @@ class ProcessImage:
         labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
         tree = cKDTree(data=x)
         dist, indices = tree.query(points, p=np.inf, distance_upper_bound=size)
-        x = points[dist<size]
-        indices = indices[dist<size]
+        x, indices = abridge(dist<size, points, indices)
         labels = labels[indices]
         return x[large_chunk(labels, min_fraction=min_fraction)]
 
@@ -549,8 +547,7 @@ class ProcessImage:
             tree = cKDTree(data=x)
             labels = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(x)
         labels = labels[tree.query(x_core)[1]]
-        cond = labels!=-1
-        return WhiteArea(x_core[cond], labels[cond])
+        return WhiteArea(*abridge(labels!=-1, x_core, labels))
 
     def apply_filter(self, filter_to_apply, size):
         area = filter_to_apply(self.get_image(mean=True), size=size)
@@ -673,7 +670,7 @@ def get_reduced_mean(img, reduction):
     new_size = reduction*np.floor(size/reduction).astype(int)
     img = img[:new_size[0], :new_size[1]]
     img = img.reshape(int(new_size[0]/reduction), reduction, int(new_size[1]/reduction), reduction, 3)
-    img = np.mean(img, axis=(1,3))
+    img = np.median(img, axis=(1,3))
     return np.rint(img).astype(int)
 
 def get_minim_white(img, x_min=400, sigma=4):
@@ -710,9 +707,7 @@ def cleanse_edge(img, erase_edge=10):
 def clear_dirt(img, white_threshold, filter_size=10, brightness_range=10, radius_threshold=0.1):
     img_mean = np.mean(img, axis=-1)
     pca = MyPCA().fit(np.stack(np.where(img_mean<white_threshold), axis=-1))
-    x = np.arange(img_mean.shape[0])
-    y = np.arange(img_mean.shape[1])
-    f = np.stack(np.meshgrid(x, y), axis=-1)
+    f = np.stack(np.meshgrid(*(np.arange(s) for s in img_mean.shape)), axis=-1)
     distance_cond = get_slope(
         pca.get_scaled_distance(f), np.array([1, 1+radius_threshold])
     ).T
@@ -725,8 +720,7 @@ def _clean_noise(img, threshold, eps=5, min_fraction=0.03):
     x = np.stack(np.where(np.mean(img, axis=-1)<threshold), axis=-1)
     cluster = DBSCAN(eps=eps).fit(x)
     labels, counts = np.unique(cluster.labels_, return_counts=True)
-    counts = counts[labels!=-1]
-    labels = labels[labels!=-1]
+    counts, labels = abridge(labels!=-1, counts, labels)
     labels = labels[counts/counts.sum()>min_fraction]
     y = x[np.all(cluster.labels_[:,None]!=labels[None,:], axis=-1)]
     img[y[:,0], y[:,1]] = np.array(3*[255])

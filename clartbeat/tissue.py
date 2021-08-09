@@ -2,7 +2,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
 from skimage.filters import frangi
-from tools import get_slope
+from clartbeat.tools import get_slope
 
 class Tissue:
     def __init__(
@@ -45,12 +45,19 @@ class Tissue:
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
 
-    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.75):
+    @property
+    def _img_reverse_color(self):
         img_bw = self.ref_job.get_image(mean=True)
+        img_bw -= self.ref_job.image.get_base_color()
+        img_bw = np.absolute(img_bw)
+        img_bw *= 255/img_bw.max()
+        return img_bw
+
+    def _get_frangi_cond(self, reverse_color=True, sigmas=[4], black_ridge=False, threshold=0.75):
         if reverse_color:
-            img_bw -= self.ref_job.image.get_base_color()
-            img_bw = np.absolute(img_bw)
-            img_bw *= 255/img_bw.max()
+            img_bw = self._img_reverse_color
+        else:
+            img_bw = self.ref_job.get_image(mean=True)
         img_white = frangi(img_bw, sigmas=sigmas, black_ridges=False)
         return img_white > threshold
 
@@ -91,7 +98,7 @@ class Tissue:
             rgb[:] = np.nan
             rgb[distances<np.inf] = img[positions[:,0], positions[:,1]]
             rgb = np.nanmedian(rgb, axis=1)
-            img[self.positions[:,0], self.positions[:,1]] = rgb
+            img[tuple(self.positions.T)] = rgb
         return img
 
     def _get_zones(self, name):
@@ -138,7 +145,7 @@ class Tissue:
         x = self.get_area(key)
         if len(x)==0:
             return
-        img[x[:,0], x[:,1]] = 1
+        img[tuple(x.T)] = 1
         return img
 
     def get_fibrous_tissue(

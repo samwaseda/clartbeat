@@ -8,7 +8,7 @@ import json
 class Analyse:
     def __init__(self, file_name, parameters=None):
         if parameters is None:
-            with open('default_parameters.txt', 'r') as f:
+            with open('clartbeat/default_parameters.txt', 'r') as f:
                 parameters = json.load(f)
         self.parameters = parameters
         self.image = ProcessImage(
