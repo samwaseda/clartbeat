@@ -667,22 +667,11 @@ class WhiteArea:
 
 def get_reduced_mean(img, reduction):
     size = np.array(img.shape[:2])
-    new_size = reduction*np.floor(size/reduction).astype(int)
+    new_size = reduction*(size//reduction)
     img = img[:new_size[0], :new_size[1]]
-    img = img.reshape(int(new_size[0]/reduction), reduction, int(new_size[1]/reduction), reduction, 3)
+    img = img.reshape(new_size[0]//reduction, reduction, new_size[1]//reduction, reduction, 3)
     img = np.median(img, axis=(1,3))
     return np.rint(img).astype(int)
-
-def get_minim_white(img, x_min=400, sigma=4):
-    for _ in range(10):
-        dx = x_min-img
-        exp = np.exp(-dx**2/(2*sigma**2))
-        div = (np.sqrt(np.pi)*sigma)
-        h = exp.sum()/div
-        dhdx = -np.sum(dx*exp)/sigma**2/div
-        ddhddx = np.sum((-1/sigma**2+dx**2/sigma**4)*exp)/div
-        x_min -= dhdx/np.absolute(ddhddx)
-    return x_min
 
 def get_white_color_threshold(img, bins=1000, sigma=3):
     x_range = np.linspace(0, 255, bins)

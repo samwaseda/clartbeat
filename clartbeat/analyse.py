@@ -6,9 +6,11 @@ from clartbeat.left_ventricle import LeftVentricle
 import json
 
 class Analyse:
-    def __init__(self, file_name, parameters=None):
+    def __init__(self, file_name, parameters=None, file_location=None):
         if parameters is None:
-            with open('clartbeat/default_parameters.txt', 'r') as f:
+            if file_location is None:
+                file_location = 'clartbeat/default_parameters.txt'
+            with open(file_location, 'r') as f:
                 parameters = json.load(f)
         self.parameters = parameters
         self.image = ProcessImage(
