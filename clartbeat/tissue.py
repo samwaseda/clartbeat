@@ -2,51 +2,54 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
 from clartbeat.tools import get_slope
+from skimage import filters
 
 class Tissue:
     def __init__(
         self,
         ref_job,
-        scar_coeff=np.array([
-            46.52921906,
-            3.23609218,
-            98.23216708,
-            83.06536593,
-            -197.3677132,
-            -59.32161332,
-            10.49473852
-        ]),
-        wrinkle_coeff=np.array([
-            105.81948491,
-            -20.37814521,
-            212.99928111,
-            -425.62869598,
-            24.75423721,
-            -163.16110443,
-            -26.80759178
-        ]),
-        frangi_sigmas=[4],
-        frangi_threshold=0.5,
-        filter_size=6,
+        parameters,
     ):
         self._data = {}
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])
         self.all_labels = None
         self.fibrous_tissue_cluster = None
         self.ref_job = ref_job
-        self.scar_coeff = np.array(scar_coeff)/np.linalg.norm(scar_coeff[:-1])
-        self.wrinkle_coeff = np.array(wrinkle_coeff)/np.linalg.norm(wrinkle_coeff[:-1])
+        self.scar_coeff = np.array(parameters['scar_coeff'])
+        self.scar_coeff /= np.linalg.norm(parameters['scar_coeff'][:-1])
         self._img = None
         self._positions = None
-        self.filter_size = filter_size
+        self.parameters = parameters
         self._classify_labels('wrinkle')
         self._classify_labels('scar')
+
+    @property
+    def _img_reverse_color(self, v_max=255):
+        img_bw = self.ref_job.image.get_image(mean=True)
+        img_bw -= self.ref_job.image.get_base_color()
+        img_bw = np.absolute(img_bw)
+        img_bw *= v_max/img_bw.max()
+        return img_bw
+
+    def _get_frangi_ridges(
+        self, reverse_color=True, sigmas=[2, 3, 4], black_ridges=False, threshold=0.85
+    ):
+        if reverse_color:
+            img_bw = self._img_reverse_color
+        else:
+            img_bw = self.ref_job.image.get_image(mean=True)
+        img_white = filters.frangi(img_bw, sigmas=sigmas, black_ridges=black_ridges)
+        cond = img_white > threshold
+        cond *= ~self.ref_job.image.non_white_area
+        return np.stack(np.where(cond), axis=-1)
 
     @property
     def positions(self):
         if self._positions is None:
             total_area = self.ref_job.image.total_area.copy()
             total_area[tuple(self.ref_job.image.white_area.x.T)] = False
+            x = self._get_frangi_ridges(**self.parameters['frangi_ridges'])
+            total_area[tuple(x.T)] = False
             self._positions = np.stack(np.where(total_area), axis=-1)
         return self._positions
 
@@ -54,7 +57,7 @@ class Tissue:
     def img(self):
         if self._img is None:
             self._img = self.ref_job.get_image()
-            self._img = self.get_median_filter(size=self.filter_size)
+            self._img = self.get_median_filter(size=self.parameters['filter_size'])
         return self._img
 
     def get_median_filter(self, size=6):

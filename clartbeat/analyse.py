@@ -53,7 +53,7 @@ class Analyse:
         if self._tissue is None:
             self._tissue = Tissue(
                 ref_job=self,
-                **self.parameters['tissue']
+                parameters=self.parameters['tissue']
             )
         return self._tissue
 
@@ -93,6 +93,8 @@ class Analyse:
         output['RL_contact_with_perimeter'] = self.right.count_neighbors(
             self.heart.perimeter.x, r=2
         )*r
+        output['scar_total'] = np.sum(self.tissue.get_distance()<0)*rr
+        output['scar_err'] = self.tissue.get_error()*rr
         if self.left_ventricle is not None:
             output['RV_area_wo_cracks'] = np.sum(
                 self.left_ventricle.separate_points(self.tissue.positions)
@@ -101,10 +103,14 @@ class Analyse:
             output['distance_left_to_right_lumen'] = np.linalg.norm(
                 self.left_ventricle.left_to_right
             )*r
+            output['scar_left'] = np.sum(
+                self.tissue.get_distance()[self.left_ventricle.separate_points(self.tissue.positions)]<0
+            )*rr
         else:
             output['RV_area_wo_cracks'] = 0
             output['RV_area'] = 0
             output['distance_left_to_right_lumen'] = 0
+            output['scar_left'] = 0
         output['area_total_white_clusters'] = len(self.image.white_area.x)*rr
         if len(self.right) > 0:
             output['curvature_crossing'] = self.heart.perimeter.get_crossing_curvature(
@@ -114,8 +120,6 @@ class Analyse:
             output['curvature_crossing'] = 0
         output['curvature_ptp'] = self.heart.perimeter.get_curvature(sigma=5).ptp()
         output['curvature_std'] = np.std(self.heart.perimeter.get_curvature(sigma=5))
-        output['scar_total'] = np.sum(self.tissue.get_distance()<0)*rr
-        output['scar_err'] = self.tissue.get_error()*rr
         return output
 
 
