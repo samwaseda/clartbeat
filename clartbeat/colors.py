@@ -5,11 +5,11 @@ from clartbeat.learn import Learn
 from scipy.spatial import cKDTree
 from collections import defaultdict
 import random
-import pandas as pd
 import matplotlib.pylab as plt
 from matplotlib.colors import LinearSegmentedColormap
 import json
 import os
+
 
 class CalibrateColors(Learn):
     def __init__(self, **arg):
@@ -37,8 +37,8 @@ class CalibrateColors(Learn):
         if isinstance(data, str):
             with open(data, 'r') as f:
                 data = json.load(f)
-        for k,v in data.items():
-            if k=='job_index' and len(self.data['job_index'])>0:
+        for k, v in data.items():
+            if k == 'job_index' and len(self.data['job_index']) > 0:
                 self.data[k].extend([d+np.max(self.data['job_index'])+1 for d in v])
             else:
                 self.data[k].extend(v)
@@ -47,22 +47,21 @@ class CalibrateColors(Learn):
         self.position_lst.append(color.ref_job.tissue.positions)
         self.img_lst.append(color.ref_job.get_image())
         self.label_lst.append(color.all_labels)
-        if len(self.data['job_index'])==0:
+        if len(self.data['job_index']) == 0:
             max_index = -1
         else:
             max_index = np.max(self.data['job_index'])
         self.data['job_index'].extend(len(color._data['unique_labels'])*[max_index+1])
-        for k,v in color._data.items():
+        for k, v in color._data.items():
             self.data[k].extend(v)
         self.data['tag'].extend(len(color._data['unique_labels'])*[-1])
         self.proceed()
 
     def fit(self, key):
-#         indices = self.get_indices([0, 1, 2])
-        if key=='scar':
+        if key == 'scar':
             clf = self.fit_scar
             indices = self.get_indices([0, 1])
-        elif key=='wrinkle':
+        elif key == 'wrinkle':
             clf = self.fit_wrinkle
             indices = self.get_indices([1, 2])
         base_color = self.get_base_colors()
@@ -70,9 +69,8 @@ class CalibrateColors(Learn):
             base_color[indices],
             np.array(self.data['colors'])[indices]
         ], axis=-1)
-        l = np.array(self.data['tag'])[indices]
         w = self.get_weights()[indices]
-        clf.fit(c, l, sample_weight=w)
+        clf.fit(c, np.array(self.data['tag'])[indices], sample_weight=w)
 
     @property
     def n_jobs(self):
@@ -80,7 +78,7 @@ class CalibrateColors(Learn):
 
     @property
     def n_labels(self):
-        return np.sum(self.data['job_index']==self.job_index)
+        return np.sum(self.data['job_index'] == self.job_index)
 
     def set_data(self, value):
         self.data['tag'][self.current_index] = value
@@ -111,13 +109,13 @@ class CalibrateColors(Learn):
 
     def get_weights(self):
         counts = np.array([
-            np.sum(np.asarray(self.data['counts'])[np.asarray(self.data['job_index'])==index])
+            np.sum(np.asarray(self.data['counts'])[np.asarray(self.data['job_index']) == index])
             for index in np.unique(self.data['job_index'])
         ])
         return np.asarray(self.data['counts'])/counts[np.array(self.data['job_index'])]
 
     def proceed(self):
-        permitted_indices = np.asarray(self.data['tag'])==-1
+        permitted_indices = np.asarray(self.data['tag']) == -1
         weights = self.get_weights()/self.get_distances()
         self.current_index = np.squeeze(random.choices(
             np.arange(len(self.data['tag']))[permitted_indices],
@@ -130,12 +128,12 @@ class CalibrateColors(Learn):
 
     def get_indices(self, tags):
         tags = np.atleast_1d(tags)
-        return np.any(np.array(self.data['tag'])[:,None]==tags[None,:], axis=-1)
+        return np.any(np.array(self.data['tag'])[:, None] == tags[None, :], axis=-1)
 
     def get_base_colors(self):
         mean_colors = []
         for index in np.unique(self.data['job_index']):
-            indices = np.asarray(self.data['job_index'])==index
+            indices = np.asarray(self.data['job_index']) == index
             mean_colors.append(np.average(
                 np.asarray(self.data['colors'])[indices],
                 axis=0,
@@ -145,7 +143,7 @@ class CalibrateColors(Learn):
 
     def save_data(self, file_name):
         data_to_store = self.data.copy()
-        for k,v in data_to_store.items():
+        for k, v in data_to_store.items():
             data_to_store[k] = np.array(v).tolist()
         with open(file_name, 'w') as fp:
             json.dump(data_to_store, fp)
@@ -169,20 +167,21 @@ class CalibrateColors(Learn):
     def plot(self):
         _, ax = plt.subplots(1, 2, figsize=(14, 7))
         ax[0].imshow(np.mean(self.current_img, axis=-1), cmap='Greys')
-        l = self.data['unique_labels'][self.current_index]
+        labels = self.data['unique_labels'][self.current_index]
         n_bin = 2
         colors = ([1, 0, 0], [1, 0, 0])
         cmap = LinearSegmentedColormap.from_list('scar', colors, N=n_bin)
         canvas = np.full(self.current_img.shape[:-1], fill_value=np.nan)
-        canvas[tuple(self.current_positions[self.current_labels==l].T)] = 1
+        canvas[tuple(self.current_positions[self.current_labels == labels].T)] = 1
         ax[0].imshow(canvas, cmap=cmap)
         ax[1].imshow(self.current_img)
 
     def get_coeff(self, key):
-        if key=='wrinkle':
+        if key == 'wrinkle':
             return np.append(self.fit_wrinkle.coef_, self.fit_wrinkle.intercept_)
         else:
             return np.append(self.fit_scar.coef_, self.fit_scar.intercept_)
+
 
 class Colors:
     def __init__(
@@ -203,11 +202,11 @@ class Colors:
     def get_mean_distance(self, n_neighbors=4):
         dist_lst = []
         for index in self._data['unique_labels']:
-            x = self.ref_job.tissue.positions[self.all_labels==index]
+            x = self.ref_job.tissue.positions[self.all_labels == index]
             tree = cKDTree(x)
-            dist_lst.append(tree.query(x, k=n_neighbors+1)[0][:,1:].mean())
+            dist_lst.append(tree.query(x, k=n_neighbors+1)[0][:, 1:].mean())
         return np.array(dist_lst)/np.sqrt(n_neighbors)
-    
+
     def run_cluster(self, n_components=20, color_enhancement=10, use_positions=False):
         x = self.get_colors()
         if not self._has_colors:
@@ -215,18 +214,19 @@ class Colors:
         if use_positions:
             x = np.concatenate(
                 (self.ref_job.tissue.positions, x*color_enhancement),
-            axis=-1)
+                axis=-1
+            )
         self.cluster = GaussianMixture(n_components=n_components).fit(x)
         self.all_labels = self.cluster.predict(x)
 
     def _sort_labels(self):
         unique_labels, counts = np.unique(self.all_labels, return_counts=True)
         colors = []
-        for l in unique_labels:
-            cond = self.all_labels==l
+        for label in unique_labels:
+            cond = self.all_labels == label
             colors.append(np.mean(
                 self.ref_job.tissue.img[
-                    self.ref_job.tissue.positions[cond,0], self.ref_job.tissue.positions[cond,1]
+                    self.ref_job.tissue.positions[cond, 0], self.ref_job.tissue.positions[cond, 1]
                 ], axis=0
             ))
         colors = np.array(colors)
@@ -238,10 +238,9 @@ class Colors:
 
     @property
     def _has_colors(self):
-        return len(self.ref_job.tissue.img.shape)==3
+        return len(self.ref_job.tissue.img.shape) == 3
 
     def _get_brightness(self, color):
         if self._has_colors:
             return np.mean(color, axis=-1)
         return color
-
