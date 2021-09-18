@@ -4,13 +4,13 @@ from scipy.spatial import cKDTree
 from clartbeat.tools import get_slope
 from skimage import filters
 
+
 class Tissue:
     def __init__(
         self,
         ref_job,
         parameters,
     ):
-        self._data = {}
         self._names = np.array(['muscle', 'scar', 'fibrous_tissue', 'wrinkle', 'residue'])
         self.all_labels = None
         self.fibrous_tissue_cluster = None
@@ -69,16 +69,16 @@ class Tissue:
                 k=np.rint(np.pi*(1+size)**2).astype(int),
                 distance_upper_bound=size
             )
-            positions = self.positions[indices[distances<np.inf]]
+            positions = self.positions[indices[distances < np.inf]]
             rgb = np.empty(distances.shape+(3,))
             rgb[:] = np.nan
-            rgb[distances<np.inf] = img[positions[:,0], positions[:,1]]
+            rgb[distances < np.inf] = img[positions[:, 0], positions[:, 1]]
             rgb = np.nanmedian(rgb, axis=1)
             img[tuple(self.positions.T)] = rgb
         return img
 
     def _get_zones(self, name):
-        return np.where(self._names==name)[0][0]
+        return np.where(self._names == name)[0][0]
 
     def get_distance(self):
         colors = self.img[tuple(self.positions.T)]
@@ -94,9 +94,9 @@ class Tissue:
         return np.sum(np.absolute(dist-np.rint(dist)))
 
     def _classify_labels(self, key):
-        if key=='wrinkle':
+        if key == 'wrinkle':
             values = self.get_distance()
-        elif key=='scar':
+        elif key == 'scar':
             values = self.get_distance()
         self.all_labels[values>=0] = self._get_zones('muscle')
         self.all_labels[values<0] = self._get_zones('scar')

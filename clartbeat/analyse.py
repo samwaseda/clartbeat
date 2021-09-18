@@ -1,9 +1,9 @@
 import numpy as np
 from clartbeat.process import ProcessImage
 from clartbeat.tissue import Tissue
-from clartbeat.area import Area
 from clartbeat.left_ventricle import LeftVentricle
 import json
+
 
 class Analyse:
     def __init__(self, file_name, parameters=None, file_location=None):
@@ -60,7 +60,7 @@ class Analyse:
     @property
     def left_ventricle(self):
         if self._left_ventricle is None:
-            if len(self.left)==0 or len(self.right)==0:
+            if len(self.left) == 0 or len(self.right) == 0:
                 return None
             self._left_ventricle = LeftVentricle(self)
         return self._left_ventricle
@@ -93,7 +93,7 @@ class Analyse:
         output['RL_contact_with_perimeter'] = self.right.count_neighbors(
             self.heart.perimeter.x, r=2
         )*r
-        output['scar_total'] = np.sum(self.tissue.get_distance()<0)*rr
+        output['scar_total'] = np.sum(self.tissue.get_distance() < 0)*rr
         output['scar_err'] = self.tissue.get_error()*rr
         if self.left_ventricle is not None:
             output['RV_area_wo_cracks'] = np.sum(
@@ -104,7 +104,9 @@ class Analyse:
                 self.left_ventricle.left_to_right
             )*r
             output['scar_left'] = np.sum(
-                self.tissue.get_distance()[self.left_ventricle.separate_points(self.tissue.positions)]<0
+                self.tissue.get_distance()[
+                    self.left_ventricle.separate_points(self.tissue.positions)
+                ] < 0
             )*rr
         else:
             output['RV_area_wo_cracks'] = 0
@@ -121,5 +123,3 @@ class Analyse:
         output['curvature_ptp'] = self.heart.perimeter.get_curvature(sigma=5).ptp()
         output['curvature_std'] = np.std(self.heart.perimeter.get_curvature(sigma=5))
         return output
-
-
