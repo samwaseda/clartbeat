@@ -1,6 +1,6 @@
-from IPython.display import Image, display, clear_output
+from IPython.display import display, clear_output
 from ipywidgets import widgets
-import numpy as np
+
 
 class Learn:
     def __init__(self, max_count=100):
@@ -18,7 +18,7 @@ class Learn:
     def run(self):
         if self.count > self.max_count:
             return
-        buttons = [widgets.Button(description = n) for n in self.choices]
+        buttons = [widgets.Button(description=n) for n in self.choices]
         self.container = widgets.HBox(children=buttons)
         self.plot()
         display(self.container)
